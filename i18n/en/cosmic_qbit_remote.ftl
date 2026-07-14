@@ -27,6 +27,7 @@ test-connection = Test Connection
 testing = Testing...
 connected = ✓ Connected! qBittorrent {$version}
 connection-failed = ✗ Failed: {$error}
+connection-required = ⚠ Please test the connection before configuring actions or patterns.
 
 # Action mode
 action-mode-heading = Action Mode
