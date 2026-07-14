@@ -1,10 +1,10 @@
 [Desktop Entry]
 Name=qBit Process Monitor
-Comment=Pause qBittorrent downloads when specific programs are running
+Comment=Pause or throttle qBittorrent downloads when specific programs are running
 Type=Application
 Icon=com.github.cosmic-qbit-remote
 Exec=cosmic-qbit-remote %F
 Terminal=false
 StartupNotify=true
-Categories=Utility;Network;COSMIC
-Keywords=torrent;qbittorrent;bandwidth;COSMIC
+Categories=Utility;Network;
+Keywords=torrent;qbittorrent;bandwidth;cosmic;

@@ -2,16 +2,30 @@
 <component type="desktop-application">
   <id>com.github.cosmic-qbit-remote</id>
   <metadata_license>CC0-1.0</metadata_license>
-  <project_license>GPL-3.0</project_license>
+  <project_license>GPL-3.0-or-later</project_license>
   <name>qBit Process Monitor</name>
-  <summary>Pause qBittorrent downloads when specific programs are running</summary>
-  <url type="vcs-browser">https://github.com/user/cosmic-qbit-remote</url>
+  <summary>Pause or throttle qBittorrent downloads when specific programs are running</summary>
+  <description>
+    <p>
+      Monitors running processes on your system and automatically pauses or throttles
+      qBittorrent downloads when a matching program is detected. Downloads resume or
+      speed limits are restored when the program exits.
+    </p>
+    <p>Features:</p>
+    <ul>
+      <li>Pause all torrents or apply speed throttle when matching processes are running</li>
+      <li>Configurable process name patterns (substring match)</li>
+      <li>Automatic resume/restore when matching processes exit</li>
+      <li>Connects to qBittorrent via its Web API</li>
+      <li>Built for the COSMIC desktop environment</li>
+    </ul>
+  </description>
+  <url type="homepage">https://github.com/YOUR_USERNAME/cosmic-qbit-remote</url>
+  <url type="bugtracker">https://github.com/YOUR_USERNAME/cosmic-qbit-remote/issues</url>
+  <url type="vcs-browser">https://github.com/YOUR_USERNAME/cosmic-qbit-remote</url>
   <launchable type="desktop-id">com.github.cosmic-qbit-remote.desktop</launchable>
   <provides>
-    <id>com.system76.CosmicApplication</id>
-    <binaries>
-      <binary>cosmic-qbit-remote</binary>
-    </binaries>
+    <binary>cosmic-qbit-remote</binary>
   </provides>
   <requires>
     <display_length compare="ge">360</display_length>
@@ -24,13 +38,20 @@
   <categories>
     <category>Utility</category>
     <category>Network</category>
-    <category>COSMIC</category>
   </categories>
   <keywords>
     <keyword>torrent</keyword>
     <keyword>qbittorrent</keyword>
     <keyword>bandwidth</keyword>
-    <keyword>COSMIC</keyword>
+    <keyword>cosmic</keyword>
+    <keyword>process monitor</keyword>
   </keywords>
   <content_rating type="oars-1.1" />
+  <releases>
+    <release version="0.1.0" date="2026-07-13">
+      <description>
+        <p>Initial release with pause and throttle modes.</p>
+      </description>
+    </release>
+  </releases>
 </component>

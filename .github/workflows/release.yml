@@ -1,0 +1,79 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  CARGO_TERM_COLOR: always
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build release binary
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build release
+        run: cargo build --release --locked
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cosmic-qbit-remote-linux-x86_64
+          path: target/release/cosmic-qbit-remote
+
+  vendor:
+    name: Create vendored source tarball
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install just
+        uses: extractions/setup-just@v2
+      - name: Vendor dependencies
+        run: just vendor
+      - name: Create source archive
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          tar czf cosmic-qbit-remote-${VERSION}-vendored.tar.gz \
+            --transform "s,^,cosmic-qbit-remote-${VERSION}/," \
+            --exclude='.git' --exclude='target' \
+            .
+      - name: Upload vendored tarball
+        uses: actions/upload-artifact@v4
+        with:
+          name: vendored-source
+          path: cosmic-qbit-remote-*-vendored.tar.gz
+
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [build, vendor]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download binary
+        uses: actions/download-artifact@v4
+        with:
+          name: cosmic-qbit-remote-linux-x86_64
+          path: artifacts/
+      - name: Download vendored source
+        uses: actions/download-artifact@v4
+        with:
+          name: vendored-source
+          path: artifacts/
+      - name: Make binary executable
+        run: chmod +x artifacts/cosmic-qbit-remote
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            artifacts/cosmic-qbit-remote
+            artifacts/cosmic-qbit-remote-*-vendored.tar.gz
