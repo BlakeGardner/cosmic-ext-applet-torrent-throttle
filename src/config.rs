@@ -2,6 +2,16 @@
 
 use cosmic::cosmic_config::{self, CosmicConfigEntry, cosmic_config_derive::CosmicConfigEntry};
 
+/// What action to take when a matching process is detected.
+#[derive(Debug, Default, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+pub enum ActionMode {
+    /// Pause all torrents.
+    #[default]
+    Pause,
+    /// Set a global speed throttle (KB/s). 0 means unlimited.
+    Throttle,
+}
+
 #[derive(Debug, Default, Clone, CosmicConfigEntry, Eq, PartialEq)]
 #[version = 1]
 pub struct Config {
@@ -11,4 +21,10 @@ pub struct Config {
     pub patterns: Vec<String>,
     pub poll_interval_secs: u64,
     pub enabled: bool,
+    /// Whether to pause or throttle when a match is detected.
+    pub action_mode: ActionMode,
+    /// Download speed limit in KB/s to apply when throttling (0 = unlimited).
+    pub throttle_download_kbps: u64,
+    /// Upload speed limit in KB/s to apply when throttling (0 = unlimited).
+    pub throttle_upload_kbps: u64,
 }

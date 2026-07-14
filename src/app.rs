@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0
 
-use crate::config::Config;
+use crate::config::{ActionMode, Config};
 use crate::fl;
 use crate::monitor::ProcessMonitor;
-use crate::qbit::QbitClient;
+use crate::qbit::{QbitClient, SpeedLimits};
 use cosmic::app::context_drawer;
 use cosmic::cosmic_config::{self, CosmicConfigEntry};
 use cosmic::iced::alignment::{Horizontal, Vertical};
@@ -25,10 +25,16 @@ pub struct AppModel {
     config: Config,
     // App-specific state
     new_pattern: String,
-    torrents_paused: bool,
+    /// Whether we have actively engaged (paused or throttled).
+    is_engaged: bool,
+    /// Speed limits saved before throttling, to be restored later.
+    saved_limits: Option<SpeedLimits>,
     matched_processes: Vec<String>,
     last_error: Option<String>,
     connection_status: Option<String>,
+    // Temporary text fields for throttle settings
+    throttle_dl_input: String,
+    throttle_ul_input: String,
 }
 
 /// Messages emitted by the application and its widgets.
@@ -49,6 +55,9 @@ pub enum Message {
     AddPattern(String),
     RemovePattern(usize),
     ToggleEnabled(bool),
+    SetActionMode(ActionMode),
+    SetThrottleDownload(String),
+    SetThrottleUpload(String),
     TestConnection,
     SaveSettings,
 
@@ -64,6 +73,7 @@ pub enum Message {
 pub struct MonitorResult {
     pub matched_processes: Vec<String>,
     pub action_taken: ActionTaken,
+    pub saved_limits: Option<SpeedLimits>,
     pub error: Option<String>,
 }
 
@@ -71,6 +81,8 @@ pub struct MonitorResult {
 pub enum ActionTaken {
     Paused,
     Resumed,
+    Throttled,
+    Unthrottled,
     None,
 }
 
@@ -147,6 +159,9 @@ impl cosmic::Application for AppModel {
             })
             .unwrap_or_default();
 
+        let throttle_dl_input = config.throttle_download_kbps.to_string();
+        let throttle_ul_input = config.throttle_upload_kbps.to_string();
+
         let mut app = AppModel {
             core,
             context_page: ContextPage::default(),
@@ -155,10 +170,13 @@ impl cosmic::Application for AppModel {
             key_binds: HashMap::new(),
             config,
             new_pattern: String::new(),
-            torrents_paused: false,
+            is_engaged: false,
+            saved_limits: None,
             matched_processes: Vec::new(),
             last_error: None,
             connection_status: None,
+            throttle_dl_input,
+            throttle_ul_input,
         };
 
         let command = app.update_title();
@@ -215,13 +233,11 @@ impl cosmic::Application for AppModel {
 
     fn subscription(&self) -> Subscription<Self::Message> {
         let mut subscriptions = vec![
-            // Watch for application configuration changes.
             self.core()
                 .watch_config::<Config>(Self::APP_ID)
                 .map(|update| Message::UpdateConfig(update.config)),
         ];
 
-        // Timer-based process monitoring subscription.
         if self.config.enabled && !self.config.patterns.is_empty() {
             let interval_secs = self.config.poll_interval_secs.max(5);
             subscriptions.push(
@@ -292,19 +308,33 @@ impl cosmic::Application for AppModel {
                 self.config.enabled = enabled;
                 self.save_config();
 
-                if !enabled && self.torrents_paused {
-                    let url = self.config.qbit_url.clone();
-                    let user = self.config.qbit_username.clone();
-                    let pass = self.config.qbit_password.clone();
-                    return cosmic::task::future(async move {
-                        let client = QbitClient::new(&url, &user, &pass);
-                        let _ = client.resume_all().await;
-                        Message::MonitorTick(MonitorResult {
-                            matched_processes: Vec::new(),
-                            action_taken: ActionTaken::Resumed,
-                            error: None,
-                        })
-                    });
+                if !enabled && self.is_engaged {
+                    return self.disengage();
+                }
+            }
+
+            Message::SetActionMode(mode) => {
+                // If we're currently engaged and the mode changes, disengage first
+                if self.is_engaged && self.config.action_mode != mode {
+                    self.config.action_mode = mode;
+                    self.save_config();
+                    return self.disengage();
+                }
+                self.config.action_mode = mode;
+                self.save_config();
+            }
+
+            Message::SetThrottleDownload(val) => {
+                self.throttle_dl_input = val.clone();
+                if let Ok(kbps) = val.parse::<u64>() {
+                    self.config.throttle_download_kbps = kbps;
+                }
+            }
+
+            Message::SetThrottleUpload(val) => {
+                self.throttle_ul_input = val.clone();
+                if let Ok(kbps) = val.parse::<u64>() {
+                    self.config.throttle_upload_kbps = kbps;
                 }
             }
 
@@ -340,9 +370,17 @@ impl cosmic::Application for AppModel {
                 self.matched_processes = result.matched_processes;
                 self.last_error = result.error;
 
+                // Store saved limits if provided (captured before throttling)
+                if let Some(limits) = result.saved_limits {
+                    self.saved_limits = Some(limits);
+                }
+
                 match result.action_taken {
-                    ActionTaken::Paused => self.torrents_paused = true,
-                    ActionTaken::Resumed => self.torrents_paused = false,
+                    ActionTaken::Paused | ActionTaken::Throttled => self.is_engaged = true,
+                    ActionTaken::Resumed | ActionTaken::Unthrottled => {
+                        self.is_engaged = false;
+                        self.saved_limits = None;
+                    }
                     ActionTaken::None => {}
                 }
             }
@@ -356,32 +394,75 @@ impl cosmic::Application for AppModel {
                 let url = self.config.qbit_url.clone();
                 let user = self.config.qbit_username.clone();
                 let pass = self.config.qbit_password.clone();
-                let was_paused = self.torrents_paused;
+                let was_engaged = self.is_engaged;
+                let action_mode = self.config.action_mode.clone();
+                let throttle_dl_bytes = self.config.throttle_download_kbps * 1024;
+                let throttle_ul_bytes = self.config.throttle_upload_kbps * 1024;
+                let saved_limits = self.saved_limits.clone();
 
                 return cosmic::task::future(async move {
                     let mut monitor = ProcessMonitor::new();
                     let matched = monitor.check_patterns(&patterns);
                     let has_matches = !matched.is_empty();
 
-                    let (action, error) = if has_matches && !was_paused {
-                        let client = QbitClient::new(&url, &user, &pass);
-                        match client.pause_all().await {
-                            Ok(()) => (ActionTaken::Paused, None),
-                            Err(e) => (ActionTaken::None, Some(e.to_string())),
-                        }
-                    } else if !has_matches && was_paused {
-                        let client = QbitClient::new(&url, &user, &pass);
-                        match client.resume_all().await {
-                            Ok(()) => (ActionTaken::Resumed, None),
-                            Err(e) => (ActionTaken::None, Some(e.to_string())),
-                        }
-                    } else {
-                        (ActionTaken::None, None)
-                    };
+                    let (action, new_saved_limits, error) =
+                        if has_matches && !was_engaged {
+                            let client = QbitClient::new(&url, &user, &pass);
+                            match action_mode {
+                                ActionMode::Pause => match client.pause_all().await {
+                                    Ok(()) => (ActionTaken::Paused, None, None),
+                                    Err(e) => (ActionTaken::None, None, Some(e.to_string())),
+                                },
+                                ActionMode::Throttle => {
+                                    // Save current limits before applying throttle
+                                    match client.get_speed_limits().await {
+                                        Ok(current) => {
+                                            let target = SpeedLimits {
+                                                download: throttle_dl_bytes,
+                                                upload: throttle_ul_bytes,
+                                            };
+                                            match client.set_speed_limits(&target).await {
+                                                Ok(()) => {
+                                                    (ActionTaken::Throttled, Some(current), None)
+                                                }
+                                                Err(e) => {
+                                                    (ActionTaken::None, None, Some(e.to_string()))
+                                                }
+                                            }
+                                        }
+                                        Err(e) => (ActionTaken::None, None, Some(e.to_string())),
+                                    }
+                                }
+                            }
+                        } else if !has_matches && was_engaged {
+                            let client = QbitClient::new(&url, &user, &pass);
+                            match action_mode {
+                                ActionMode::Pause => match client.resume_all().await {
+                                    Ok(()) => (ActionTaken::Resumed, None, None),
+                                    Err(e) => (ActionTaken::None, None, Some(e.to_string())),
+                                },
+                                ActionMode::Throttle => {
+                                    // Restore previously saved limits
+                                    let restore = saved_limits.unwrap_or(SpeedLimits {
+                                        download: 0,
+                                        upload: 0,
+                                    });
+                                    match client.set_speed_limits(&restore).await {
+                                        Ok(()) => (ActionTaken::Unthrottled, None, None),
+                                        Err(e) => {
+                                            (ActionTaken::None, None, Some(e.to_string()))
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            (ActionTaken::None, None, None)
+                        };
 
                     Message::MonitorTick(MonitorResult {
                         matched_processes: matched,
                         action_taken: action,
+                        saved_limits: new_saved_limits,
                         error,
                     })
                 });
@@ -423,10 +504,42 @@ impl AppModel {
         }
     }
 
+    /// Disengage: resume torrents or restore speed limits depending on current mode.
+    fn disengage(&mut self) -> Task<cosmic::Action<Message>> {
+        let url = self.config.qbit_url.clone();
+        let user = self.config.qbit_username.clone();
+        let pass = self.config.qbit_password.clone();
+        let action_mode = self.config.action_mode.clone();
+        let saved_limits = self.saved_limits.clone();
+
+        cosmic::task::future(async move {
+            let client = QbitClient::new(&url, &user, &pass);
+            let (action, error) = match action_mode {
+                ActionMode::Pause => match client.resume_all().await {
+                    Ok(()) => (ActionTaken::Resumed, None),
+                    Err(e) => (ActionTaken::None, Some(e.to_string())),
+                },
+                ActionMode::Throttle => {
+                    let restore =
+                        saved_limits.unwrap_or(SpeedLimits { download: 0, upload: 0 });
+                    match client.set_speed_limits(&restore).await {
+                        Ok(()) => (ActionTaken::Unthrottled, None),
+                        Err(e) => (ActionTaken::None, Some(e.to_string())),
+                    }
+                }
+            };
+            Message::MonitorTick(MonitorResult {
+                matched_processes: Vec::new(),
+                action_taken: action,
+                saved_limits: None,
+                error,
+            })
+        })
+    }
+
     fn view_status(&self, space_s: u16) -> Element<'_, Message> {
         let mut content = widget::column::with_capacity(10).spacing(space_s);
 
-        // Title
         content = content.push(widget::text::title3(fl!("status-title")));
 
         // Enable toggle
@@ -442,12 +555,22 @@ impl AppModel {
             fl!("status-disabled")
         } else if self.config.patterns.is_empty() {
             fl!("status-no-patterns")
-        } else if self.torrents_paused {
-            fl!("status-paused")
+        } else if self.is_engaged {
+            match self.config.action_mode {
+                ActionMode::Pause => fl!("status-paused"),
+                ActionMode::Throttle => fl!("status-throttled"),
+            }
         } else {
             fl!("status-running")
         };
         content = content.push(widget::text::body(status_text));
+
+        // Show current mode
+        let mode_text = match self.config.action_mode {
+            ActionMode::Pause => fl!("mode-pause"),
+            ActionMode::Throttle => fl!("mode-throttle"),
+        };
+        content = content.push(widget::text::caption(mode_text));
 
         // Matched processes
         if !self.matched_processes.is_empty() {
@@ -484,7 +607,7 @@ impl AppModel {
     }
 
     fn view_settings(&self, space_s: u16) -> Element<'_, Message> {
-        let mut content = widget::column::with_capacity(12).spacing(space_s);
+        let mut content = widget::column::with_capacity(16).spacing(space_s);
 
         content = content.push(widget::text::title3(fl!("settings-title")));
 
@@ -533,6 +656,50 @@ impl AppModel {
                     self.connection_status.as_deref().unwrap_or(""),
                 )),
         );
+
+        // Action mode section
+        let is_pause = self.config.action_mode == ActionMode::Pause;
+        let mode_section = cosmic::widget::settings::section()
+            .title(fl!("action-mode-heading"))
+            .add(
+                cosmic::widget::settings::item::builder(fl!("mode-pause-label")).control(
+                    widget::radio("", true, Some(is_pause), |_| {
+                        Message::SetActionMode(ActionMode::Pause)
+                    }),
+                ),
+            )
+            .add(
+                cosmic::widget::settings::item::builder(fl!("mode-throttle-label")).control(
+                    widget::radio("", true, Some(!is_pause), |_| {
+                        Message::SetActionMode(ActionMode::Throttle)
+                    }),
+                ),
+            );
+
+        content = content.push(mode_section);
+
+        // Throttle settings (shown when throttle mode selected)
+        if self.config.action_mode == ActionMode::Throttle {
+            let throttle_section = cosmic::widget::settings::section()
+                .title(fl!("throttle-settings"))
+                .add(
+                    cosmic::widget::settings::item::builder(fl!("throttle-download"))
+                        .control(
+                            widget::text_input::text_input("0", &self.throttle_dl_input)
+                                .on_input(Message::SetThrottleDownload),
+                        ),
+                )
+                .add(
+                    cosmic::widget::settings::item::builder(fl!("throttle-upload"))
+                        .control(
+                            widget::text_input::text_input("0", &self.throttle_ul_input)
+                                .on_input(Message::SetThrottleUpload),
+                        ),
+                );
+
+            content = content.push(throttle_section);
+            content = content.push(widget::text::caption(fl!("throttle-hint")));
+        }
 
         // Pattern management section
         content = content.push(widget::text::heading(fl!("patterns-heading")));
