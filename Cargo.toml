@@ -1,0 +1,15 @@
+[package]
+name = "cosmic-qbit-remote"
+version = "0.1.0"
+edition = "2021"
+description = "COSMIC desktop app to pause qBittorrent downloads when specific programs are running"
+license = "GPL-3.0"
+
+[dependencies]
+libcosmic = { git = "https://github.com/pop-os/libcosmic", default-features = false, features = ["tokio", "winit"] }
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", features = ["json", "cookies"] }
+sysinfo = "0.33"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+dirs = "6"
