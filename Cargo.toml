@@ -2,14 +2,34 @@
 name = "cosmic-qbit-remote"
 version = "0.1.0"
 edition = "2021"
-description = "COSMIC desktop app to pause qBittorrent downloads when specific programs are running"
 license = "GPL-3.0"
+description = "COSMIC app to pause qBittorrent downloads when specific programs are running"
+repository = "https://github.com/user/cosmic-qbit-remote"
 
 [dependencies]
-libcosmic = { git = "https://github.com/pop-os/libcosmic", default-features = false, features = ["tokio", "winit"] }
+i18n-embed = { version = "0.16", features = [
+    "fluent-system",
+    "desktop-requester",
+] }
+i18n-embed-fl = "0.10"
+open = "5"
+rust-embed = "8"
 tokio = { version = "1", features = ["full"] }
 reqwest = { version = "0.12", features = ["json", "cookies"] }
 sysinfo = "0.33"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-dirs = "6"
+
+[dependencies.libcosmic]
+git = "https://github.com/pop-os/libcosmic.git"
+features = [
+    "about",
+    "tokio",
+    "winit",
+]
+
+# Uncomment to test a locally-cloned libcosmic
+# [patch.'https://github.com/pop-os/libcosmic']
+# libcosmic = { path = "../libcosmic" }
+# cosmic-config = { path = "../libcosmic/cosmic-config" }
+# cosmic-theme = { path = "../libcosmic/cosmic-theme" }

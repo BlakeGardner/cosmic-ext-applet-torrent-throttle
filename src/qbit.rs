@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0
+
 use reqwest::Client;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -95,7 +97,6 @@ impl QbitClient {
             .map_err(|e| QbitError::RequestFailed(e.to_string()))?;
 
         if response.status() == reqwest::StatusCode::FORBIDDEN {
-            // Session expired, re-auth and retry
             let mut auth = self.authenticated.lock().await;
             *auth = false;
             drop(auth);

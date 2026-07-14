@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.github.cosmic-qbit-remote</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0</project_license>
+  <name>qBit Process Monitor</name>
+  <summary>Pause qBittorrent downloads when specific programs are running</summary>
+  <url type="vcs-browser">https://github.com/user/cosmic-qbit-remote</url>
+  <launchable type="desktop-id">com.github.cosmic-qbit-remote.desktop</launchable>
+  <provides>
+    <id>com.system76.CosmicApplication</id>
+    <binaries>
+      <binary>cosmic-qbit-remote</binary>
+    </binaries>
+  </provides>
+  <requires>
+    <display_length compare="ge">360</display_length>
+  </requires>
+  <supports>
+    <control>keyboard</control>
+    <control>pointing</control>
+    <control>touch</control>
+  </supports>
+  <categories>
+    <category>Utility</category>
+    <category>Network</category>
+    <category>COSMIC</category>
+  </categories>
+  <keywords>
+    <keyword>torrent</keyword>
+    <keyword>qbittorrent</keyword>
+    <keyword>bandwidth</keyword>
+    <keyword>COSMIC</keyword>
+  </keywords>
+  <content_rating type="oars-1.1" />
+</component>

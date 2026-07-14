@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0
+
 use sysinfo::System;
 
 pub struct ProcessMonitor {
@@ -14,7 +16,8 @@ impl ProcessMonitor {
     /// Refresh process list and check if any process name contains one of the patterns.
     /// Returns a list of matched process names.
     pub fn check_patterns(&mut self, patterns: &[String]) -> Vec<String> {
-        self.system.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
+        self.system
+            .refresh_processes(sysinfo::ProcessesToUpdate::All, true);
 
         let mut matched = Vec::new();
 

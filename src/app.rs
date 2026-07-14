@@ -1,0 +1,581 @@
+// SPDX-License-Identifier: GPL-3.0
+
+use crate::config::Config;
+use crate::fl;
+use crate::monitor::ProcessMonitor;
+use crate::qbit::QbitClient;
+use cosmic::app::context_drawer;
+use cosmic::cosmic_config::{self, CosmicConfigEntry};
+use cosmic::iced::alignment::{Horizontal, Vertical};
+use cosmic::iced::{Alignment, Length, Subscription};
+use cosmic::prelude::*;
+use cosmic::widget::{self, about::About, menu, nav_bar};
+use std::collections::HashMap;
+use std::time::Duration;
+
+const REPOSITORY: &str = env!("CARGO_PKG_REPOSITORY");
+
+/// The application model stores app-specific state.
+pub struct AppModel {
+    core: cosmic::Core,
+    context_page: ContextPage,
+    about: About,
+    nav: nav_bar::Model,
+    key_binds: HashMap<menu::KeyBind, MenuAction>,
+    config: Config,
+    // App-specific state
+    new_pattern: String,
+    torrents_paused: bool,
+    matched_processes: Vec<String>,
+    last_error: Option<String>,
+    connection_status: Option<String>,
+}
+
+/// Messages emitted by the application and its widgets.
+#[derive(Debug, Clone)]
+pub enum Message {
+    // Navigation / chrome
+    LaunchUrl(String),
+    ToggleContextPage(ContextPage),
+
+    // Config updates from cosmic-config watcher
+    UpdateConfig(Config),
+
+    // Settings inputs
+    SetQbitUrl(String),
+    SetQbitUsername(String),
+    SetQbitPassword(String),
+    SetNewPattern(String),
+    AddPattern(String),
+    RemovePattern(usize),
+    ToggleEnabled(bool),
+    TestConnection,
+    SaveSettings,
+
+    // Monitor
+    Tick,
+    MonitorTick(MonitorResult),
+
+    // Connection test result
+    ConnectionResult(Result<String, String>),
+}
+
+#[derive(Debug, Clone)]
+pub struct MonitorResult {
+    pub matched_processes: Vec<String>,
+    pub action_taken: ActionTaken,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ActionTaken {
+    Paused,
+    Resumed,
+    None,
+}
+
+/// Pages shown in the nav bar.
+pub enum Page {
+    Status,
+    Settings,
+}
+
+/// The context page to display in the context drawer.
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+pub enum ContextPage {
+    #[default]
+    About,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MenuAction {
+    About,
+}
+
+impl menu::action::MenuAction for MenuAction {
+    type Message = Message;
+
+    fn message(&self) -> Self::Message {
+        match self {
+            MenuAction::About => Message::ToggleContextPage(ContextPage::About),
+        }
+    }
+}
+
+impl cosmic::Application for AppModel {
+    type Executor = cosmic::executor::Default;
+    type Flags = ();
+    type Message = Message;
+
+    const APP_ID: &'static str = "com.github.cosmic-qbit-remote";
+
+    fn core(&self) -> &cosmic::Core {
+        &self.core
+    }
+
+    fn core_mut(&mut self) -> &mut cosmic::Core {
+        &mut self.core
+    }
+
+    fn init(
+        core: cosmic::Core,
+        _flags: Self::Flags,
+    ) -> (Self, Task<cosmic::Action<Self::Message>>) {
+        let mut nav = nav_bar::Model::default();
+
+        nav.insert()
+            .text(fl!("status-title"))
+            .data::<Page>(Page::Status)
+            .icon(widget::icon::from_name("utilities-system-monitor-symbolic"))
+            .activate();
+
+        nav.insert()
+            .text(fl!("settings-title"))
+            .data::<Page>(Page::Settings)
+            .icon(widget::icon::from_name("preferences-system-symbolic"));
+
+        let about = About::default()
+            .name(fl!("app-title"))
+            .version(env!("CARGO_PKG_VERSION"))
+            .links([(fl!("repository"), REPOSITORY)])
+            .license(env!("CARGO_PKG_LICENSE"));
+
+        let config = cosmic_config::Config::new(Self::APP_ID, Config::VERSION)
+            .map(|context| match Config::get_entry(&context) {
+                Ok(config) => config,
+                Err((_errors, config)) => config,
+            })
+            .unwrap_or_default();
+
+        let mut app = AppModel {
+            core,
+            context_page: ContextPage::default(),
+            about,
+            nav,
+            key_binds: HashMap::new(),
+            config,
+            new_pattern: String::new(),
+            torrents_paused: false,
+            matched_processes: Vec::new(),
+            last_error: None,
+            connection_status: None,
+        };
+
+        let command = app.update_title();
+        (app, command)
+    }
+
+    fn header_start(&self) -> Vec<Element<'_, Self::Message>> {
+        let menu_bar = menu::bar(vec![menu::Tree::with_children(
+            menu::root(fl!("view")).apply(Element::from),
+            menu::items(
+                &self.key_binds,
+                vec![menu::Item::Button(fl!("about"), None, MenuAction::About)],
+            ),
+        )]);
+
+        vec![menu_bar.into()]
+    }
+
+    fn nav_model(&self) -> Option<&nav_bar::Model> {
+        Some(&self.nav)
+    }
+
+    fn context_drawer(&self) -> Option<context_drawer::ContextDrawer<'_, Self::Message>> {
+        if !self.core.window.show_context {
+            return None;
+        }
+
+        Some(match self.context_page {
+            ContextPage::About => context_drawer::about(
+                &self.about,
+                |url| Message::LaunchUrl(url.to_string()),
+                Message::ToggleContextPage(ContextPage::About),
+            ),
+        })
+    }
+
+    fn view(&self) -> Element<'_, Self::Message> {
+        let space_s = cosmic::theme::spacing().space_s;
+
+        let content: Element<_> = match self.nav.active_data::<Page>() {
+            Some(Page::Status) | None => self.view_status(space_s),
+            Some(Page::Settings) => self.view_settings(space_s),
+        };
+
+        widget::container(content)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .apply(widget::container)
+            .width(Length::Fill)
+            .align_x(Horizontal::Center)
+            .align_y(Vertical::Top)
+            .into()
+    }
+
+    fn subscription(&self) -> Subscription<Self::Message> {
+        let mut subscriptions = vec![
+            // Watch for application configuration changes.
+            self.core()
+                .watch_config::<Config>(Self::APP_ID)
+                .map(|update| Message::UpdateConfig(update.config)),
+        ];
+
+        // Timer-based process monitoring subscription.
+        if self.config.enabled && !self.config.patterns.is_empty() {
+            let interval_secs = self.config.poll_interval_secs.max(5);
+            subscriptions.push(
+                cosmic::iced::time::every(Duration::from_secs(interval_secs))
+                    .map(|_| Message::Tick),
+            );
+        }
+
+        Subscription::batch(subscriptions)
+    }
+
+    fn update(&mut self, message: Self::Message) -> Task<cosmic::Action<Self::Message>> {
+        match message {
+            Message::LaunchUrl(url) => {
+                let _ = open::that_detached(&url);
+            }
+
+            Message::ToggleContextPage(context_page) => {
+                if self.context_page == context_page {
+                    self.core.window.show_context = !self.core.window.show_context;
+                } else {
+                    self.context_page = context_page;
+                    self.core.window.show_context = true;
+                }
+            }
+
+            Message::UpdateConfig(config) => {
+                self.config = config;
+            }
+
+            Message::SetQbitUrl(url) => {
+                self.config.qbit_url = url;
+            }
+
+            Message::SetQbitUsername(username) => {
+                self.config.qbit_username = username;
+            }
+
+            Message::SetQbitPassword(password) => {
+                self.config.qbit_password = password;
+            }
+
+            Message::SetNewPattern(pattern) => {
+                self.new_pattern = pattern;
+            }
+
+            Message::AddPattern(submitted) => {
+                let pattern = if submitted.is_empty() {
+                    self.new_pattern.trim().to_string()
+                } else {
+                    submitted.trim().to_string()
+                };
+                if !pattern.is_empty() && !self.config.patterns.contains(&pattern) {
+                    self.config.patterns.push(pattern);
+                    self.new_pattern.clear();
+                    self.save_config();
+                }
+            }
+
+            Message::RemovePattern(idx) => {
+                if idx < self.config.patterns.len() {
+                    self.config.patterns.remove(idx);
+                    self.save_config();
+                }
+            }
+
+            Message::ToggleEnabled(enabled) => {
+                self.config.enabled = enabled;
+                self.save_config();
+
+                if !enabled && self.torrents_paused {
+                    let url = self.config.qbit_url.clone();
+                    let user = self.config.qbit_username.clone();
+                    let pass = self.config.qbit_password.clone();
+                    return cosmic::task::future(async move {
+                        let client = QbitClient::new(&url, &user, &pass);
+                        let _ = client.resume_all().await;
+                        Message::MonitorTick(MonitorResult {
+                            matched_processes: Vec::new(),
+                            action_taken: ActionTaken::Resumed,
+                            error: None,
+                        })
+                    });
+                }
+            }
+
+            Message::TestConnection => {
+                let url = self.config.qbit_url.clone();
+                let user = self.config.qbit_username.clone();
+                let pass = self.config.qbit_password.clone();
+                self.connection_status = Some(fl!("testing"));
+                return cosmic::task::future(async move {
+                    let client = QbitClient::new(&url, &user, &pass);
+                    match client.test_connection().await {
+                        Ok(version) => Message::ConnectionResult(Ok(version)),
+                        Err(e) => Message::ConnectionResult(Err(e.to_string())),
+                    }
+                });
+            }
+
+            Message::ConnectionResult(result) => match result {
+                Ok(version) => {
+                    self.connection_status = Some(fl!("connected", version = version.as_str()));
+                }
+                Err(e) => {
+                    self.connection_status =
+                        Some(fl!("connection-failed", error = e.as_str()));
+                }
+            },
+
+            Message::SaveSettings => {
+                self.save_config();
+            }
+
+            Message::MonitorTick(result) => {
+                self.matched_processes = result.matched_processes;
+                self.last_error = result.error;
+
+                match result.action_taken {
+                    ActionTaken::Paused => self.torrents_paused = true,
+                    ActionTaken::Resumed => self.torrents_paused = false,
+                    ActionTaken::None => {}
+                }
+            }
+
+            Message::Tick => {
+                if !self.config.enabled || self.config.patterns.is_empty() {
+                    return Task::none();
+                }
+
+                let patterns = self.config.patterns.clone();
+                let url = self.config.qbit_url.clone();
+                let user = self.config.qbit_username.clone();
+                let pass = self.config.qbit_password.clone();
+                let was_paused = self.torrents_paused;
+
+                return cosmic::task::future(async move {
+                    let mut monitor = ProcessMonitor::new();
+                    let matched = monitor.check_patterns(&patterns);
+                    let has_matches = !matched.is_empty();
+
+                    let (action, error) = if has_matches && !was_paused {
+                        let client = QbitClient::new(&url, &user, &pass);
+                        match client.pause_all().await {
+                            Ok(()) => (ActionTaken::Paused, None),
+                            Err(e) => (ActionTaken::None, Some(e.to_string())),
+                        }
+                    } else if !has_matches && was_paused {
+                        let client = QbitClient::new(&url, &user, &pass);
+                        match client.resume_all().await {
+                            Ok(()) => (ActionTaken::Resumed, None),
+                            Err(e) => (ActionTaken::None, Some(e.to_string())),
+                        }
+                    } else {
+                        (ActionTaken::None, None)
+                    };
+
+                    Message::MonitorTick(MonitorResult {
+                        matched_processes: matched,
+                        action_taken: action,
+                        error,
+                    })
+                });
+            }
+        }
+
+        Task::none()
+    }
+
+    fn on_nav_select(&mut self, id: nav_bar::Id) -> Task<cosmic::Action<Self::Message>> {
+        self.nav.activate(id);
+        self.update_title()
+    }
+}
+
+impl AppModel {
+    fn update_title(&mut self) -> Task<cosmic::Action<Message>> {
+        let mut window_title = fl!("app-title");
+
+        if let Some(page) = self.nav.text(self.nav.active()) {
+            window_title.push_str(" — ");
+            window_title.push_str(page);
+        }
+
+        if let Some(id) = self.core.main_window_id() {
+            self.set_window_title(window_title, id)
+        } else {
+            Task::none()
+        }
+    }
+
+    fn save_config(&self) {
+        if let Ok(context) =
+            cosmic_config::Config::new(<AppModel as cosmic::Application>::APP_ID, Config::VERSION)
+        {
+            if let Err(err) = self.config.write_entry(&context) {
+                eprintln!("failed to save config: {err}");
+            }
+        }
+    }
+
+    fn view_status(&self, space_s: u16) -> Element<'_, Message> {
+        let mut content = widget::column::with_capacity(10).spacing(space_s);
+
+        // Title
+        content = content.push(widget::text::title3(fl!("status-title")));
+
+        // Enable toggle
+        let toggle_section = cosmic::widget::settings::section().add(
+            cosmic::widget::settings::item::builder(fl!("monitoring")).control(
+                widget::toggler(self.config.enabled).on_toggle(Message::ToggleEnabled),
+            ),
+        );
+        content = content.push(toggle_section);
+
+        // Status indicator
+        let status_text = if !self.config.enabled {
+            fl!("status-disabled")
+        } else if self.config.patterns.is_empty() {
+            fl!("status-no-patterns")
+        } else if self.torrents_paused {
+            fl!("status-paused")
+        } else {
+            fl!("status-running")
+        };
+        content = content.push(widget::text::body(status_text));
+
+        // Matched processes
+        if !self.matched_processes.is_empty() {
+            content = content.push(widget::text::heading(fl!("matched-processes")));
+            for proc in &self.matched_processes {
+                content = content.push(
+                    widget::row::with_capacity(2)
+                        .spacing(8)
+                        .push(widget::text::body("•"))
+                        .push(widget::text::body(proc.as_str())),
+                );
+            }
+        }
+
+        // Watched patterns
+        if !self.config.patterns.is_empty() {
+            content = content.push(widget::text::heading(fl!("watching-for")));
+            for pattern in &self.config.patterns {
+                content = content.push(
+                    widget::row::with_capacity(2)
+                        .spacing(8)
+                        .push(widget::text::body("•"))
+                        .push(widget::text::body(pattern.as_str())),
+                );
+            }
+        }
+
+        // Error display
+        if let Some(ref error) = self.last_error {
+            content = content.push(widget::text::body(format!("Error: {}", error)));
+        }
+
+        content.width(Length::Fill).height(Length::Fill).into()
+    }
+
+    fn view_settings(&self, space_s: u16) -> Element<'_, Message> {
+        let mut content = widget::column::with_capacity(12).spacing(space_s);
+
+        content = content.push(widget::text::title3(fl!("settings-title")));
+
+        // qBittorrent connection settings section
+        let connection_section = cosmic::widget::settings::section()
+            .title(fl!("connection-heading"))
+            .add(
+                cosmic::widget::settings::item::builder(fl!("url-label")).control(
+                    widget::text_input::text_input(
+                        "http://localhost:8080",
+                        &self.config.qbit_url,
+                    )
+                    .on_input(Message::SetQbitUrl),
+                ),
+            )
+            .add(
+                cosmic::widget::settings::item::builder(fl!("username-label")).control(
+                    widget::text_input::text_input("admin", &self.config.qbit_username)
+                        .on_input(Message::SetQbitUsername),
+                ),
+            )
+            .add(
+                cosmic::widget::settings::item::builder(fl!("password-label")).control(
+                    widget::text_input::secure_input(
+                        "password",
+                        &self.config.qbit_password,
+                        None::<Message>,
+                        true,
+                    )
+                    .on_input(Message::SetQbitPassword),
+                ),
+            );
+
+        content = content.push(connection_section);
+
+        // Test connection button
+        content = content.push(
+            widget::row::with_capacity(2)
+                .spacing(12)
+                .align_y(Alignment::Center)
+                .push(
+                    widget::button::standard(fl!("test-connection"))
+                        .on_press(Message::TestConnection),
+                )
+                .push(widget::text::body(
+                    self.connection_status.as_deref().unwrap_or(""),
+                )),
+        );
+
+        // Pattern management section
+        content = content.push(widget::text::heading(fl!("patterns-heading")));
+        content = content.push(widget::text::caption(fl!("patterns-description")));
+
+        // Add pattern input
+        content = content.push(
+            widget::row::with_capacity(2)
+                .spacing(8)
+                .align_y(Alignment::Center)
+                .push(
+                    widget::text_input::text_input(
+                        "e.g. steam, firefox",
+                        &self.new_pattern,
+                    )
+                    .on_input(Message::SetNewPattern)
+                    .on_submit(Message::AddPattern),
+                )
+                .push(
+                    widget::button::standard(fl!("add"))
+                        .on_press(Message::AddPattern(String::new())),
+                ),
+        );
+
+        // Pattern list
+        for (idx, pattern) in self.config.patterns.iter().enumerate() {
+            content = content.push(
+                widget::row::with_capacity(2)
+                    .spacing(8)
+                    .align_y(Alignment::Center)
+                    .push(widget::text::body(pattern.as_str()).width(Length::Fill))
+                    .push(
+                        widget::button::destructive(fl!("remove"))
+                            .on_press(Message::RemovePattern(idx)),
+                    ),
+            );
+        }
+
+        // Save button
+        content = content.push(
+            widget::button::suggested(fl!("save")).on_press(Message::SaveSettings),
+        );
+
+        content.width(Length::Fill).height(Length::Fill).into()
+    }
+}
