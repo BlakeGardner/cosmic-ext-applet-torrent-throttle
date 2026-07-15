@@ -11,7 +11,7 @@ use cosmic::iced::alignment::Horizontal;
 use cosmic::iced::futures::{SinkExt, StreamExt, channel::mpsc};
 use cosmic::iced::{Alignment, Color, Length, Subscription, window};
 use cosmic::prelude::*;
-use cosmic::widget::{self, about::About, menu, nav_bar};
+use cosmic::widget::{self, about::About, menu};
 use ksni::TrayMethods;
 use std::collections::HashMap;
 use std::time::Duration;
@@ -23,7 +23,6 @@ pub struct AppModel {
     core: cosmic::Core,
     context_page: ContextPage,
     about: About,
-    nav: nav_bar::Model,
     key_binds: HashMap<menu::KeyBind, MenuAction>,
     config: Config,
     // App-specific state
@@ -114,12 +113,6 @@ pub enum ActionTaken {
     None,
 }
 
-/// Pages shown in the nav bar.
-pub enum Page {
-    Status,
-    Settings,
-}
-
 /// The context page to display in the context drawer.
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
 pub enum ContextPage {
@@ -161,19 +154,6 @@ impl cosmic::Application for AppModel {
         core: cosmic::Core,
         _flags: Self::Flags,
     ) -> (Self, Task<cosmic::Action<Self::Message>>) {
-        let mut nav = nav_bar::Model::default();
-
-        nav.insert()
-            .text(fl!("nav-status"))
-            .data::<Page>(Page::Status)
-            .icon(widget::icon::from_name("utilities-system-monitor-symbolic"))
-            .activate();
-
-        nav.insert()
-            .text(fl!("nav-settings"))
-            .data::<Page>(Page::Settings)
-            .icon(widget::icon::from_name("preferences-system-symbolic"));
-
         let about = About::default()
             .name(fl!("app-title"))
             .version(env!("CARGO_PKG_VERSION"))
@@ -194,7 +174,6 @@ impl cosmic::Application for AppModel {
             core,
             context_page: ContextPage::default(),
             about,
-            nav,
             key_binds: HashMap::new(),
             config,
             new_pattern: String::new(),
@@ -224,10 +203,6 @@ impl cosmic::Application for AppModel {
         vec![menu_bar.into()]
     }
 
-    fn nav_model(&self) -> Option<&nav_bar::Model> {
-        Some(&self.nav)
-    }
-
     fn context_drawer(&self) -> Option<context_drawer::ContextDrawer<'_, Self::Message>> {
         if !self.core.window.show_context {
             return None;
@@ -245,12 +220,7 @@ impl cosmic::Application for AppModel {
     fn view(&self) -> Element<'_, Self::Message> {
         let spacing = cosmic::theme::spacing();
 
-        let content: Element<_> = match self.nav.active_data::<Page>() {
-            Some(Page::Status) | None => self.view_status(spacing.space_s),
-            Some(Page::Settings) => self.view_settings(spacing.space_s),
-        };
-
-        let page = widget::container(content)
+        let page = widget::container(self.view_settings(spacing.space_s))
             .max_width(640.0)
             .padding([spacing.space_s, spacing.space_l]);
 
@@ -285,6 +255,7 @@ impl cosmic::Application for AppModel {
                         engaged: false,
                         status_text: String::new(),
                         throttle_text: None,
+                        error_text: None,
                         tx,
                     };
 
@@ -325,11 +296,6 @@ impl cosmic::Application for AppModel {
         } else {
             Task::batch([task, self.sync_tray()])
         }
-    }
-
-    fn on_nav_select(&mut self, id: nav_bar::Id) -> Task<cosmic::Action<Self::Message>> {
-        self.nav.activate(id);
-        self.update_title()
     }
 }
 
@@ -592,15 +558,8 @@ impl AppModel {
     }
 
     fn update_title(&mut self) -> Task<cosmic::Action<Message>> {
-        let mut window_title = fl!("app-title");
-
-        if let Some(page) = self.nav.text(self.nav.active()) {
-            window_title.push_str(" — ");
-            window_title.push_str(page);
-        }
-
         if let Some(id) = self.core.main_window_id() {
-            self.set_window_title(window_title, id)
+            self.set_window_title(fl!("app-title"), id)
         } else {
             Task::none()
         }
@@ -617,12 +576,13 @@ impl AppModel {
     }
 
     /// Snapshot of the state mirrored to the tray, used to detect changes.
-    fn tray_snapshot(&self) -> (bool, bool, String, Option<String>) {
+    fn tray_snapshot(&self) -> (bool, bool, String, Option<String>, Option<String>) {
         (
             self.config.enabled,
             self.is_engaged,
             self.tray_status_text(),
             self.tray_throttle_text(),
+            self.tray_error_text(),
         )
     }
 
@@ -632,10 +592,16 @@ impl AppModel {
         } else if self.config.patterns.is_empty() {
             fl!("status-no-patterns")
         } else if self.is_engaged {
-            match self.config.action_mode {
+            let mut text = match self.config.action_mode {
                 ActionMode::Pause => fl!("status-paused"),
                 ActionMode::Throttle => fl!("status-throttled"),
+            };
+            if !self.matched_processes.is_empty() {
+                text.push_str(" (");
+                text.push_str(&self.matched_processes.join(", "));
+                text.push(')');
             }
+            text
         } else {
             fl!("status-running")
         }
@@ -651,6 +617,12 @@ impl AppModel {
         })
     }
 
+    fn tray_error_text(&self) -> Option<String> {
+        self.last_error
+            .as_ref()
+            .map(|error| fl!("error-message", error = error.as_str()))
+    }
+
     /// Push the current state to the tray icon and menu.
     fn sync_tray(&self) -> Task<cosmic::Action<Message>> {
         let Some(handle) = self.tray.clone() else {
@@ -660,6 +632,7 @@ impl AppModel {
         let engaged = self.is_engaged;
         let status_text = self.tray_status_text();
         let throttle_text = self.tray_throttle_text();
+        let error_text = self.tray_error_text();
 
         cosmic::task::future(async move {
             handle
@@ -668,6 +641,7 @@ impl AppModel {
                     tray.engaged = engaged;
                     tray.status_text = status_text;
                     tray.throttle_text = throttle_text;
+                    tray.error_text = error_text;
                 })
                 .await;
             Message::NoOp
@@ -681,7 +655,7 @@ impl AppModel {
         }
 
         let (id, task) = window::open(window::Settings {
-            size: cosmic::iced::Size::new(1024.0, 768.0),
+            size: cosmic::iced::Size::new(700.0, 600.0),
             min_size: Some(cosmic::iced::Size::new(400.0, 300.0)),
             decorations: false,
             transparent: true,
@@ -730,114 +704,20 @@ impl AppModel {
         })
     }
 
-    fn view_status(&self, space_s: u16) -> Element<'_, Message> {
-        let theme = cosmic::theme::active();
-        let cosmic = theme.cosmic();
-        let mut content = widget::column::with_capacity(10).spacing(space_s);
-
-        content = content.push(widget::text::title3(fl!("status-title")));
-
-        // Enable toggle
-        let toggle_section = widget::settings::section().add(
-            widget::settings::item::builder(fl!("monitoring")).control(
-                widget::toggler(self.config.enabled).on_toggle(Message::ToggleEnabled),
-            ),
-        );
-        content = content.push(toggle_section);
-
-        // Status indicator: symbolic icon + sentence-case text
-        let (status_icon, status_text, status_color) = if !self.config.enabled {
-            (
-                "media-playback-pause-symbolic",
-                fl!("status-disabled"),
-                None,
-            )
-        } else if self.config.patterns.is_empty() {
-            (
-                "dialog-warning-symbolic",
-                fl!("status-no-patterns"),
-                Some(cosmic.warning_text_color()),
-            )
-        } else if self.is_engaged {
-            match self.config.action_mode {
-                ActionMode::Pause => (
-                    "media-playback-pause-symbolic",
-                    fl!("status-paused"),
-                    Some(cosmic.warning_text_color()),
-                ),
-                ActionMode::Throttle => (
-                    "media-playback-pause-symbolic",
-                    fl!("status-throttled"),
-                    Some(cosmic.warning_text_color()),
-                ),
-            }
-        } else {
-            (
-                "media-playback-start-symbolic",
-                fl!("status-running"),
-                Some(cosmic.success_text_color()),
-            )
-        };
-
-        let mut status_label = widget::text::body(status_text);
-        if let Some(color) = status_color {
-            status_label =
-                status_label.class(cosmic::theme::Text::Color(Color::from(color)));
-        }
-
-        content = content.push(
-            widget::row::with_capacity(2)
-                .spacing(space_s)
-                .align_y(Alignment::Center)
-                .push(widget::icon::from_name(status_icon).size(16))
-                .push(status_label),
-        );
-
-        // Show current mode
-        let mode_text = match self.config.action_mode {
-            ActionMode::Pause => fl!("mode-pause"),
-            ActionMode::Throttle => fl!("mode-throttle"),
-        };
-        content = content.push(widget::text::caption(mode_text));
-
-        // Matched processes
-        if !self.matched_processes.is_empty() {
-            content = content.push(widget::text::heading(fl!("matched-processes")));
-            let mut list = widget::list_column();
-            for proc in &self.matched_processes {
-                list = list.add(widget::text::body(proc.as_str()));
-            }
-            content = content.push(list);
-        }
-
-        // Watched patterns
-        if !self.config.patterns.is_empty() {
-            content = content.push(widget::text::heading(fl!("watching-for")));
-            let mut list = widget::list_column();
-            for pattern in &self.config.patterns {
-                list = list.add(widget::text::body(pattern.as_str()));
-            }
-            content = content.push(list);
-        }
-
-        // Error display
-        if let Some(ref error) = self.last_error {
-            content = content.push(
-                widget::text::body(fl!("error-message", error = error.as_str())).class(
-                    cosmic::theme::Text::Color(Color::from(cosmic.destructive_text_color())),
-                ),
-            );
-        }
-
-        content.width(Length::Fill).into()
-    }
-
     fn view_settings(&self, space_s: u16) -> Element<'_, Message> {
         let theme = cosmic::theme::active();
         let cosmic = theme.cosmic();
         let mut content = widget::column::with_capacity(16).spacing(space_s);
 
         content = content.push(widget::text::title3(fl!("settings-title")));
+
+        // Monitoring toggle, mirrored with the tray menu.
+        let monitoring_section = widget::settings::section().add(
+            widget::settings::item::builder(fl!("monitoring"))
+                .description(self.tray_status_text())
+                .control(widget::toggler(self.config.enabled).on_toggle(Message::ToggleEnabled)),
+        );
+        content = content.push(monitoring_section);
 
         // qBittorrent connection settings section
         let connection_section = widget::settings::section()

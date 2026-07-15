@@ -17,6 +17,7 @@ pub struct QbitTray {
     pub engaged: bool,
     pub status_text: String,
     pub throttle_text: Option<String>,
+    pub error_text: Option<String>,
     pub tx: UnboundedSender<TrayEvent>,
 }
 
@@ -27,6 +28,10 @@ impl QbitTray {
 }
 
 impl ksni::Tray for QbitTray {
+    // Open the menu on left-click (sets ItemIsMenu), matching the behavior of
+    // the COSMIC Wi-Fi and Bluetooth tray icons.
+    const MENU_ON_ACTIVATE: bool = true;
+
     fn id(&self) -> String {
         env!("CARGO_PKG_NAME").into()
     }
@@ -54,6 +59,10 @@ impl ksni::Tray for QbitTray {
             description.push('\n');
             description.push_str(throttle);
         }
+        if let Some(ref error) = self.error_text {
+            description.push('\n');
+            description.push_str(error);
+        }
         ksni::ToolTip {
             title: fl!("app-title"),
             description,
@@ -61,14 +70,22 @@ impl ksni::Tray for QbitTray {
         }
     }
 
-    fn activate(&mut self, _x: i32, _y: i32) {
-        self.send(TrayEvent::ShowWindow);
-    }
-
     fn menu(&self) -> Vec<ksni::MenuItem<Self>> {
         use ksni::menu::{CheckmarkItem, StandardItem};
 
+        // Primary control first, like the COSMIC Wi-Fi/Bluetooth menus.
         let mut items: Vec<ksni::MenuItem<Self>> = vec![
+            CheckmarkItem {
+                label: fl!("tray-monitoring"),
+                checked: self.enabled,
+                activate: Box::new(|tray: &mut Self| {
+                    tray.enabled = !tray.enabled;
+                    tray.send(TrayEvent::ToggleMonitoring(tray.enabled));
+                }),
+                ..Default::default()
+            }
+            .into(),
+            ksni::MenuItem::Separator,
             StandardItem {
                 label: self.status_text.clone(),
                 enabled: false,
@@ -88,22 +105,23 @@ impl ksni::Tray for QbitTray {
             );
         }
 
+        if let Some(ref error) = self.error_text {
+            items.push(
+                StandardItem {
+                    label: error.clone(),
+                    icon_name: "dialog-error-symbolic".into(),
+                    enabled: false,
+                    ..Default::default()
+                }
+                .into(),
+            );
+        }
+
         items.extend([
             ksni::MenuItem::Separator,
-            CheckmarkItem {
-                label: fl!("tray-monitoring"),
-                checked: self.enabled,
-                activate: Box::new(|tray: &mut Self| {
-                    tray.enabled = !tray.enabled;
-                    tray.send(TrayEvent::ToggleMonitoring(tray.enabled));
-                }),
-                ..Default::default()
-            }
-            .into(),
-            ksni::MenuItem::Separator,
             StandardItem {
-                label: fl!("tray-show-window"),
-                icon_name: "window-new-symbolic".into(),
+                label: fl!("tray-settings"),
+                icon_name: "preferences-system-symbolic".into(),
                 activate: Box::new(|tray: &mut Self| tray.send(TrayEvent::ShowWindow)),
                 ..Default::default()
             }

@@ -3,22 +3,13 @@ about = About
 view = View
 repository = Repository
 
-# Navigation
-nav-status = Status
-nav-settings = Settings
-
-# Status page
-status-title = Status
+# Status (shown in settings and the tray)
 monitoring = Monitoring
 status-disabled = Monitoring is disabled
 status-no-patterns = No process patterns configured
 status-paused = Torrents paused — matching process detected
 status-throttled = Torrents throttled — matching process detected
 status-running = Torrents running — no matching processes
-matched-processes = Matched processes
-watching-for = Watching for
-mode-pause = Action: pause all torrents
-mode-throttle = Action: throttle speed
 error-message = Error: {$error}
 
 # Settings page
@@ -52,6 +43,6 @@ remove = Remove
 
 # Tray
 tray-monitoring = Monitoring
-tray-show-window = Show window
+tray-settings = Settings…
 tray-quit = Quit
 tray-throttle-limits = Throttle: {$down} KB/s down / {$up} KB/s up

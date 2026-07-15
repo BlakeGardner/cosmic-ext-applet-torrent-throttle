@@ -7,7 +7,7 @@ A COSMIC desktop application that monitors running processes and automatically p
 - **Process Monitoring**: Scans running processes every 30 seconds for configurable name patterns
 - **Auto-Pause**: Pauses all qBittorrent downloads when a matching process is detected
 - **Auto-Resume**: Resumes downloads when no matching processes are running
-- **System Tray**: Minimizes to the system tray (StatusNotifierItem); the tray menu shows the current status and throttle limits, and lets you toggle monitoring, reopen the window, or quit
+- **Tray-First**: Lives in the system tray (StatusNotifierItem); clicking the icon opens a menu with a monitoring toggle and live status/throttle info, just like the COSMIC Wi-Fi and Bluetooth applets. The app window only hosts settings and closes to the tray
 - **COSMIC Native**: Built with libcosmic for native integration with the COSMIC desktop
 - **Configurable**: Set qBittorrent API connection details and process patterns through the GUI
 - **i18n Ready**: Uses Fluent for internationalization

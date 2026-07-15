@@ -19,6 +19,7 @@ fn main() -> cosmic::iced::Result {
     // the main window is closed.
     let settings = cosmic::app::Settings::default()
         .exit_on_close(false)
+        .size(cosmic::iced::Size::new(700.0, 600.0))
         .size_limits(
             cosmic::iced::Limits::NONE
                 .min_width(400.0)
