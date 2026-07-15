@@ -6,8 +6,8 @@ use crate::monitor::ProcessMonitor;
 use crate::qbit::{QbitClient, SpeedLimits};
 use cosmic::app::context_drawer;
 use cosmic::cosmic_config::{self, CosmicConfigEntry};
-use cosmic::iced::alignment::{Horizontal, Vertical};
-use cosmic::iced::{Alignment, Length, Subscription};
+use cosmic::iced::alignment::Horizontal;
+use cosmic::iced::{Alignment, Color, Length, Subscription};
 use cosmic::prelude::*;
 use cosmic::widget::{self, about::About, menu, nav_bar};
 use std::collections::HashMap;
@@ -31,9 +31,7 @@ pub struct AppModel {
     saved_limits: Option<SpeedLimits>,
     matched_processes: Vec<String>,
     last_error: Option<String>,
-    connection_status: Option<String>,
-    /// Whether the qBittorrent connection has been successfully tested this session.
-    connection_verified: bool,
+    connection_status: Option<ConnectionStatus>,
     // Temporary text fields for throttle settings
     throttle_dl_input: String,
     throttle_ul_input: String,
@@ -61,7 +59,6 @@ pub enum Message {
     SetThrottleDownload(String),
     SetThrottleUpload(String),
     TestConnection,
-    SaveSettings,
 
     // Monitor
     Tick,
@@ -77,6 +74,14 @@ pub struct MonitorResult {
     pub action_taken: ActionTaken,
     pub saved_limits: Option<SpeedLimits>,
     pub error: Option<String>,
+}
+
+/// Result of the most recent connection test.
+#[derive(Debug, Clone)]
+pub enum ConnectionStatus {
+    Testing,
+    Connected(String),
+    Failed(String),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -138,13 +143,13 @@ impl cosmic::Application for AppModel {
         let mut nav = nav_bar::Model::default();
 
         nav.insert()
-            .text(fl!("status-title"))
+            .text(fl!("nav-status"))
             .data::<Page>(Page::Status)
             .icon(widget::icon::from_name("utilities-system-monitor-symbolic"))
             .activate();
 
         nav.insert()
-            .text(fl!("settings-title"))
+            .text(fl!("nav-settings"))
             .data::<Page>(Page::Settings)
             .icon(widget::icon::from_name("preferences-system-symbolic"));
 
@@ -177,7 +182,6 @@ impl cosmic::Application for AppModel {
             matched_processes: Vec::new(),
             last_error: None,
             connection_status: None,
-            connection_verified: false,
             throttle_dl_input,
             throttle_ul_input,
         };
@@ -217,21 +221,24 @@ impl cosmic::Application for AppModel {
     }
 
     fn view(&self) -> Element<'_, Self::Message> {
-        let space_s = cosmic::theme::spacing().space_s;
+        let spacing = cosmic::theme::spacing();
 
         let content: Element<_> = match self.nav.active_data::<Page>() {
-            Some(Page::Status) | None => self.view_status(space_s),
-            Some(Page::Settings) => self.view_settings(space_s),
+            Some(Page::Status) | None => self.view_status(spacing.space_s),
+            Some(Page::Settings) => self.view_settings(spacing.space_s),
         };
 
-        widget::container(content)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .apply(widget::container)
-            .width(Length::Fill)
-            .align_x(Horizontal::Center)
-            .align_y(Vertical::Top)
-            .into()
+        let page = widget::container(content)
+            .max_width(640.0)
+            .padding([spacing.space_s, spacing.space_l]);
+
+        widget::scrollable(
+            widget::container(page)
+                .width(Length::Fill)
+                .align_x(Horizontal::Center),
+        )
+        .height(Length::Fill)
+        .into()
     }
 
     fn subscription(&self) -> Subscription<Self::Message> {
@@ -273,17 +280,17 @@ impl cosmic::Application for AppModel {
 
             Message::SetQbitUrl(url) => {
                 self.config.qbit_url = url;
-                self.connection_verified = false;
+                self.save_config();
             }
 
             Message::SetQbitUsername(username) => {
                 self.config.qbit_username = username;
-                self.connection_verified = false;
+                self.save_config();
             }
 
             Message::SetQbitPassword(password) => {
                 self.config.qbit_password = password;
-                self.connection_verified = false;
+                self.save_config();
             }
 
             Message::SetNewPattern(pattern) => {
@@ -291,9 +298,6 @@ impl cosmic::Application for AppModel {
             }
 
             Message::AddPattern(submitted) => {
-                if !self.connection_verified {
-                    return cosmic::app::Task::none();
-                }
                 let pattern = if submitted.is_empty() {
                     self.new_pattern.trim().to_string()
                 } else {
@@ -307,9 +311,6 @@ impl cosmic::Application for AppModel {
             }
 
             Message::RemovePattern(idx) => {
-                if !self.connection_verified {
-                    return cosmic::app::Task::none();
-                }
                 if idx < self.config.patterns.len() {
                     self.config.patterns.remove(idx);
                     self.save_config();
@@ -326,9 +327,6 @@ impl cosmic::Application for AppModel {
             }
 
             Message::SetActionMode(mode) => {
-                if !self.connection_verified {
-                    return cosmic::app::Task::none();
-                }
                 // If we're currently engaged and the mode changes, disengage first
                 if self.is_engaged && self.config.action_mode != mode {
                     self.config.action_mode = mode;
@@ -343,6 +341,7 @@ impl cosmic::Application for AppModel {
                 self.throttle_dl_input = val.clone();
                 if let Ok(kbps) = val.parse::<u64>() {
                     self.config.throttle_download_kbps = kbps;
+                    self.save_config();
                 }
             }
 
@@ -350,6 +349,7 @@ impl cosmic::Application for AppModel {
                 self.throttle_ul_input = val.clone();
                 if let Ok(kbps) = val.parse::<u64>() {
                     self.config.throttle_upload_kbps = kbps;
+                    self.save_config();
                 }
             }
 
@@ -357,7 +357,7 @@ impl cosmic::Application for AppModel {
                 let url = self.config.qbit_url.clone();
                 let user = self.config.qbit_username.clone();
                 let pass = self.config.qbit_password.clone();
-                self.connection_status = Some(fl!("testing"));
+                self.connection_status = Some(ConnectionStatus::Testing);
                 return cosmic::task::future(async move {
                     let client = QbitClient::new(&url, &user, &pass);
                     match client.test_connection().await {
@@ -369,22 +369,12 @@ impl cosmic::Application for AppModel {
 
             Message::ConnectionResult(result) => match result {
                 Ok(version) => {
-                    self.connection_status = Some(fl!("connected", version = version.as_str()));
-                    self.connection_verified = true;
+                    self.connection_status = Some(ConnectionStatus::Connected(version));
                 }
                 Err(e) => {
-                    self.connection_status =
-                        Some(fl!("connection-failed", error = e.as_str()));
-                    self.connection_verified = false;
+                    self.connection_status = Some(ConnectionStatus::Failed(e));
                 }
             },
-
-            Message::SaveSettings => {
-                if !self.connection_verified {
-                    return cosmic::app::Task::none();
-                }
-                self.save_config();
-            }
 
             Message::MonitorTick(result) => {
                 self.matched_processes = result.matched_processes;
@@ -558,32 +548,67 @@ impl AppModel {
     }
 
     fn view_status(&self, space_s: u16) -> Element<'_, Message> {
+        let theme = cosmic::theme::active();
+        let cosmic = theme.cosmic();
         let mut content = widget::column::with_capacity(10).spacing(space_s);
 
         content = content.push(widget::text::title3(fl!("status-title")));
 
         // Enable toggle
-        let toggle_section = cosmic::widget::settings::section().add(
-            cosmic::widget::settings::item::builder(fl!("monitoring")).control(
+        let toggle_section = widget::settings::section().add(
+            widget::settings::item::builder(fl!("monitoring")).control(
                 widget::toggler(self.config.enabled).on_toggle(Message::ToggleEnabled),
             ),
         );
         content = content.push(toggle_section);
 
-        // Status indicator
-        let status_text = if !self.config.enabled {
-            fl!("status-disabled")
+        // Status indicator: symbolic icon + sentence-case text
+        let (status_icon, status_text, status_color) = if !self.config.enabled {
+            (
+                "media-playback-pause-symbolic",
+                fl!("status-disabled"),
+                None,
+            )
         } else if self.config.patterns.is_empty() {
-            fl!("status-no-patterns")
+            (
+                "dialog-warning-symbolic",
+                fl!("status-no-patterns"),
+                Some(cosmic.warning_text_color()),
+            )
         } else if self.is_engaged {
             match self.config.action_mode {
-                ActionMode::Pause => fl!("status-paused"),
-                ActionMode::Throttle => fl!("status-throttled"),
+                ActionMode::Pause => (
+                    "media-playback-pause-symbolic",
+                    fl!("status-paused"),
+                    Some(cosmic.warning_text_color()),
+                ),
+                ActionMode::Throttle => (
+                    "media-playback-pause-symbolic",
+                    fl!("status-throttled"),
+                    Some(cosmic.warning_text_color()),
+                ),
             }
         } else {
-            fl!("status-running")
+            (
+                "media-playback-start-symbolic",
+                fl!("status-running"),
+                Some(cosmic.success_text_color()),
+            )
         };
-        content = content.push(widget::text::body(status_text));
+
+        let mut status_label = widget::text::body(status_text);
+        if let Some(color) = status_color {
+            status_label =
+                status_label.class(cosmic::theme::Text::Color(Color::from(color)));
+        }
+
+        content = content.push(
+            widget::row::with_capacity(2)
+                .spacing(space_s)
+                .align_y(Alignment::Center)
+                .push(widget::icon::from_name(status_icon).size(16))
+                .push(status_label),
+        );
 
         // Show current mode
         let mode_text = match self.config.action_mode {
@@ -595,48 +620,47 @@ impl AppModel {
         // Matched processes
         if !self.matched_processes.is_empty() {
             content = content.push(widget::text::heading(fl!("matched-processes")));
+            let mut list = widget::list_column();
             for proc in &self.matched_processes {
-                content = content.push(
-                    widget::row::with_capacity(2)
-                        .spacing(8)
-                        .push(widget::text::body("•"))
-                        .push(widget::text::body(proc.as_str())),
-                );
+                list = list.add(widget::text::body(proc.as_str()));
             }
+            content = content.push(list);
         }
 
         // Watched patterns
         if !self.config.patterns.is_empty() {
             content = content.push(widget::text::heading(fl!("watching-for")));
+            let mut list = widget::list_column();
             for pattern in &self.config.patterns {
-                content = content.push(
-                    widget::row::with_capacity(2)
-                        .spacing(8)
-                        .push(widget::text::body("•"))
-                        .push(widget::text::body(pattern.as_str())),
-                );
+                list = list.add(widget::text::body(pattern.as_str()));
             }
+            content = content.push(list);
         }
 
         // Error display
         if let Some(ref error) = self.last_error {
-            content = content.push(widget::text::body(format!("Error: {}", error)));
+            content = content.push(
+                widget::text::body(fl!("error-message", error = error.as_str())).class(
+                    cosmic::theme::Text::Color(Color::from(cosmic.destructive_text_color())),
+                ),
+            );
         }
 
-        content.width(Length::Fill).height(Length::Fill).into()
+        content.width(Length::Fill).into()
     }
 
     fn view_settings(&self, space_s: u16) -> Element<'_, Message> {
+        let theme = cosmic::theme::active();
+        let cosmic = theme.cosmic();
         let mut content = widget::column::with_capacity(16).spacing(space_s);
-        let verified = self.connection_verified;
 
         content = content.push(widget::text::title3(fl!("settings-title")));
 
-        // qBittorrent connection settings section (always editable)
-        let connection_section = cosmic::widget::settings::section()
+        // qBittorrent connection settings section
+        let connection_section = widget::settings::section()
             .title(fl!("connection-heading"))
             .add(
-                cosmic::widget::settings::item::builder(fl!("url-label")).control(
+                widget::settings::item::builder(fl!("url-label")).control(
                     widget::text_input::text_input(
                         "http://localhost:8080",
                         &self.config.qbit_url,
@@ -645,13 +669,13 @@ impl AppModel {
                 ),
             )
             .add(
-                cosmic::widget::settings::item::builder(fl!("username-label")).control(
+                widget::settings::item::builder(fl!("username-label")).control(
                     widget::text_input::text_input("admin", &self.config.qbit_username)
                         .on_input(Message::SetQbitUsername),
                 ),
             )
             .add(
-                cosmic::widget::settings::item::builder(fl!("password-label")).control(
+                widget::settings::item::builder(fl!("password-label")).control(
                     widget::text_input::secure_input(
                         "password",
                         &self.config.qbit_password,
@@ -664,38 +688,51 @@ impl AppModel {
 
         content = content.push(connection_section);
 
-        // Test connection button
-        content = content.push(
-            widget::row::with_capacity(2)
-                .spacing(12)
-                .align_y(Alignment::Center)
-                .push(
-                    widget::button::standard(fl!("test-connection"))
-                        .on_press(Message::TestConnection),
-                )
-                .push(widget::text::body(
-                    self.connection_status.as_deref().unwrap_or(""),
-                )),
-        );
+        // Test connection button with colored status text
+        let status_label: Option<Element<'_, Message>> = match &self.connection_status {
+            Some(ConnectionStatus::Testing) => Some(widget::text::body(fl!("testing")).into()),
+            Some(ConnectionStatus::Connected(version)) => Some(
+                widget::text::body(fl!("connected", version = version.as_str()))
+                    .class(cosmic::theme::Text::Color(Color::from(
+                        cosmic.success_text_color(),
+                    )))
+                    .into(),
+            ),
+            Some(ConnectionStatus::Failed(error)) => Some(
+                widget::text::body(fl!("connection-failed", error = error.as_str()))
+                    .class(cosmic::theme::Text::Color(Color::from(
+                        cosmic.destructive_text_color(),
+                    )))
+                    .into(),
+            ),
+            None => None,
+        };
 
-        // Show a hint if not verified
-        if !verified {
-            content = content.push(widget::text::caption(fl!("connection-required")));
+        let mut test_row = widget::row::with_capacity(2)
+            .spacing(space_s)
+            .align_y(Alignment::Center)
+            .push(
+                widget::button::standard(fl!("test-connection"))
+                    .on_press(Message::TestConnection),
+            );
+        if let Some(label) = status_label {
+            test_row = test_row.push(label);
         }
+        content = content.push(test_row);
 
-        // Action mode section (gated in update handler when not verified)
+        // Action mode section
         let is_pause = self.config.action_mode == ActionMode::Pause;
-        let mode_section = cosmic::widget::settings::section()
+        let mode_section = widget::settings::section()
             .title(fl!("action-mode-heading"))
             .add(
-                cosmic::widget::settings::item::builder(fl!("mode-pause-label")).control(
+                widget::settings::item::builder(fl!("mode-pause-label")).control(
                     widget::radio("", true, Some(is_pause), |_| {
                         Message::SetActionMode(ActionMode::Pause)
                     }),
                 ),
             )
             .add(
-                cosmic::widget::settings::item::builder(fl!("mode-throttle-label")).control(
+                widget::settings::item::builder(fl!("mode-throttle-label")).control(
                     widget::radio("", true, Some(!is_pause), |_| {
                         Message::SetActionMode(ActionMode::Throttle)
                     }),
@@ -704,91 +741,64 @@ impl AppModel {
 
         content = content.push(mode_section);
 
-        // Throttle settings (shown when throttle mode selected, disabled until verified)
+        // Throttle settings (shown when throttle mode selected)
         if self.config.action_mode == ActionMode::Throttle {
-            let mut throttle_dl =
-                widget::text_input::text_input("0", &self.throttle_dl_input);
-            let mut throttle_ul =
-                widget::text_input::text_input("0", &self.throttle_ul_input);
-
-            if verified {
-                throttle_dl = throttle_dl.on_input(Message::SetThrottleDownload);
-                throttle_ul = throttle_ul.on_input(Message::SetThrottleUpload);
-            }
-
-            let throttle_section = cosmic::widget::settings::section()
+            let throttle_section = widget::settings::section()
                 .title(fl!("throttle-settings"))
                 .add(
-                    cosmic::widget::settings::item::builder(fl!("throttle-download"))
-                        .control(throttle_dl),
+                    widget::settings::item::builder(fl!("throttle-download")).control(
+                        widget::text_input::text_input("0", &self.throttle_dl_input)
+                            .on_input(Message::SetThrottleDownload),
+                    ),
                 )
                 .add(
-                    cosmic::widget::settings::item::builder(fl!("throttle-upload"))
-                        .control(throttle_ul),
+                    widget::settings::item::builder(fl!("throttle-upload")).control(
+                        widget::text_input::text_input("0", &self.throttle_ul_input)
+                            .on_input(Message::SetThrottleUpload),
+                    ),
                 );
 
             content = content.push(throttle_section);
             content = content.push(widget::text::caption(fl!("throttle-hint")));
         }
 
-        // Pattern management section (disabled until verified)
+        // Pattern management section
         content = content.push(widget::text::heading(fl!("patterns-heading")));
         content = content.push(widget::text::caption(fl!("patterns-description")));
 
         // Add pattern input
-        {
-            let mut pattern_input =
-                widget::text_input::text_input("e.g. steam, firefox", &self.new_pattern);
-
-            if verified {
-                pattern_input = pattern_input
-                    .on_input(Message::SetNewPattern)
-                    .on_submit(Message::AddPattern);
-            }
-
-            content = content.push(
-                widget::row::with_capacity(2)
-                    .spacing(8)
-                    .align_y(Alignment::Center)
-                    .push(pattern_input)
-                    .push(
-                        widget::button::standard(fl!("add"))
-                            .on_press_maybe(if verified {
-                                Some(Message::AddPattern(String::new()))
-                            } else {
-                                None
-                            }),
-                    ),
-            );
-        }
-
-        // Pattern list (remove buttons disabled until verified)
-        for (idx, pattern) in self.config.patterns.iter().enumerate() {
-            content = content.push(
-                widget::row::with_capacity(2)
-                    .spacing(8)
-                    .align_y(Alignment::Center)
-                    .push(widget::text::body(pattern.as_str()).width(Length::Fill))
-                    .push(
-                        widget::button::destructive(fl!("remove"))
-                            .on_press_maybe(if verified {
-                                Some(Message::RemovePattern(idx))
-                            } else {
-                                None
-                            }),
-                    ),
-            );
-        }
-
-        // Save button (disabled until verified)
         content = content.push(
-            widget::button::suggested(fl!("save")).on_press_maybe(if verified {
-                Some(Message::SaveSettings)
-            } else {
-                None
-            }),
+            widget::row::with_capacity(2)
+                .spacing(space_s)
+                .align_y(Alignment::Center)
+                .push(
+                    widget::text_input::text_input(
+                        fl!("pattern-placeholder"),
+                        &self.new_pattern,
+                    )
+                    .on_input(Message::SetNewPattern)
+                    .on_submit(Message::AddPattern),
+                )
+                .push(
+                    widget::button::standard(fl!("add"))
+                        .on_press(Message::AddPattern(String::new())),
+                ),
         );
 
-        content.width(Length::Fill).height(Length::Fill).into()
+        // Pattern list
+        if !self.config.patterns.is_empty() {
+            let mut patterns_section = widget::settings::section();
+            for (idx, pattern) in self.config.patterns.iter().enumerate() {
+                patterns_section = patterns_section.add(
+                    widget::settings::item::builder(pattern.clone()).control(
+                        widget::button::destructive(fl!("remove"))
+                            .on_press(Message::RemovePattern(idx)),
+                    ),
+                );
+            }
+            content = content.push(patterns_section);
+        }
+
+        content.width(Length::Fill).into()
     }
 }
