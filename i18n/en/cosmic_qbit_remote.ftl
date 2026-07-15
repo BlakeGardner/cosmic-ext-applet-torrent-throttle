@@ -3,13 +3,15 @@ about = About
 view = View
 repository = Repository
 
-# Status (shown in settings and the tray)
+# Status (shown in settings and the panel applet)
 monitoring = Monitoring
+monitoring-description = Watching for matching processes
 status-disabled = Monitoring is disabled
 status-no-patterns = No process patterns configured
 status-paused = Torrents paused — matching process detected
 status-throttled = Torrents throttled — matching process detected
 status-running = Torrents running — no matching processes
+throttle-status = Throttle: {$down} KB/s down / {$up} KB/s up
 error-message = Error: {$error}
 
 # Settings page
@@ -40,9 +42,3 @@ patterns-description = The action is applied while any process matching these pa
 pattern-placeholder = e.g. steam, firefox
 add = Add
 remove = Remove
-
-# Tray
-tray-monitoring = Monitoring
-tray-settings = Settings…
-tray-quit = Quit
-tray-throttle-limits = Throttle: {$down} KB/s down / {$up} KB/s up

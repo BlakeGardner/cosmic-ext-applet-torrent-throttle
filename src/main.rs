@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0
 
 mod app;
+mod applet;
 mod config;
+mod engine;
 mod i18n;
 mod monitor;
 mod qbit;
-mod tray;
 
 fn main() -> cosmic::iced::Result {
     // Get the system's preferred languages.
@@ -14,17 +15,17 @@ fn main() -> cosmic::iced::Result {
     // Enable localizations to be applied.
     i18n::init(&requested_languages);
 
+    // `--applet` runs the panel applet; no arguments runs the settings window.
+    if std::env::args().any(|arg| arg == "--applet") {
+        return applet::run();
+    }
+
     // Settings for configuring the application window and iced runtime.
-    // `exit_on_close(false)` keeps the app running in the system tray when
-    // the main window is closed.
-    let settings = cosmic::app::Settings::default()
-        .exit_on_close(false)
-        .size(cosmic::iced::Size::new(700.0, 600.0))
-        .size_limits(
-            cosmic::iced::Limits::NONE
-                .min_width(400.0)
-                .min_height(300.0),
-        );
+    let settings = cosmic::app::Settings::default().size_limits(
+        cosmic::iced::Limits::NONE
+            .min_width(400.0)
+            .min_height(300.0),
+    );
 
     // Starts the application's event loop.
     cosmic::app::run::<app::AppModel>(settings, ())

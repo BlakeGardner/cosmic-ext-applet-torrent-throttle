@@ -14,6 +14,8 @@ cargo-target-dir := env('CARGO_TARGET_DIR', 'target')
 appdata := appid + '.metainfo.xml'
 # Application's desktop entry
 desktop := appid + '.desktop'
+# Applet's desktop entry (panel applet)
+applet-desktop := appid + '.Applet.desktop'
 # Application's icon.
 icon-svg := appid + '.svg'
 
@@ -22,6 +24,7 @@ base-dir := absolute_path(clean(rootdir / prefix))
 appdata-dst := base-dir / 'share' / 'appdata' / appdata
 bin-dst := base-dir / 'bin' / name
 desktop-dst := base-dir / 'share' / 'applications' / desktop
+applet-desktop-dst := base-dir / 'share' / 'applications' / applet-desktop
 icons-dst := base-dir / 'share' / 'icons' / 'hicolor'
 icon-svg-dst := icons-dst / 'scalable' / 'apps'
 
@@ -64,12 +67,13 @@ run *args:
 install:
     install -Dm0755 {{ cargo-target-dir / 'release' / name }} {{bin-dst}}
     install -Dm0644 {{ 'resources' / desktop }} {{desktop-dst}}
+    install -Dm0644 {{ 'resources' / applet-desktop }} {{applet-desktop-dst}}
     install -Dm0644 {{ 'resources' / appdata }} {{appdata-dst}}
     install -Dm0644 {{ 'resources' / 'icons' / 'hicolor' / 'scalable' / 'apps' / 'icon.svg' }} {{icon-svg-dst / icon-svg}}
 
 # Uninstalls installed files
 uninstall:
-    rm {{bin-dst}} {{desktop-dst}} {{icon-svg-dst}}
+    rm {{bin-dst}} {{desktop-dst}} {{applet-desktop-dst}} {{icon-svg-dst}}
 
 # Vendor dependencies locally
 vendor:

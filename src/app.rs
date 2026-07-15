@@ -2,19 +2,14 @@
 
 use crate::config::{ActionMode, Config};
 use crate::fl;
-use crate::monitor::ProcessMonitor;
-use crate::qbit::{QbitClient, SpeedLimits};
-use crate::tray::{QbitTray, TrayEvent};
+use crate::qbit::QbitClient;
 use cosmic::app::context_drawer;
 use cosmic::cosmic_config::{self, CosmicConfigEntry};
 use cosmic::iced::alignment::Horizontal;
-use cosmic::iced::futures::{SinkExt, StreamExt, channel::mpsc};
-use cosmic::iced::{Alignment, Color, Length, Subscription, window};
+use cosmic::iced::{Alignment, Color, Length, Subscription};
 use cosmic::prelude::*;
 use cosmic::widget::{self, about::About, menu};
-use ksni::TrayMethods;
 use std::collections::HashMap;
-use std::time::Duration;
 
 const REPOSITORY: &str = env!("CARGO_PKG_REPOSITORY");
 
@@ -27,18 +22,10 @@ pub struct AppModel {
     config: Config,
     // App-specific state
     new_pattern: String,
-    /// Whether we have actively engaged (paused or throttled).
-    is_engaged: bool,
-    /// Speed limits saved before throttling, to be restored later.
-    saved_limits: Option<SpeedLimits>,
-    matched_processes: Vec<String>,
-    last_error: Option<String>,
     connection_status: Option<ConnectionStatus>,
     // Temporary text fields for throttle settings
     throttle_dl_input: String,
     throttle_ul_input: String,
-    /// Handle to the system tray, once it has been spawned.
-    tray: Option<ksni::Handle<QbitTray>>,
 }
 
 /// Messages emitted by the application and its widgets.
@@ -64,36 +51,8 @@ pub enum Message {
     SetThrottleUpload(String),
     TestConnection,
 
-    // Monitor
-    Tick,
-    MonitorTick(MonitorResult),
-
     // Connection test result
     ConnectionResult(Result<String, String>),
-
-    // System tray
-    TrayReady(TrayHandle),
-    TrayEvent(TrayEvent),
-    WindowCloseRequested(window::Id),
-    NoOp,
-}
-
-/// Wrapper so the tray handle can be carried inside a `Message`.
-#[derive(Clone)]
-pub struct TrayHandle(pub ksni::Handle<QbitTray>);
-
-impl std::fmt::Debug for TrayHandle {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("TrayHandle")
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct MonitorResult {
-    pub matched_processes: Vec<String>,
-    pub action_taken: ActionTaken,
-    pub saved_limits: Option<SpeedLimits>,
-    pub error: Option<String>,
 }
 
 /// Result of the most recent connection test.
@@ -102,15 +61,6 @@ pub enum ConnectionStatus {
     Testing,
     Connected(String),
     Failed(String),
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum ActionTaken {
-    Paused,
-    Resumed,
-    Throttled,
-    Unthrottled,
-    None,
 }
 
 /// The context page to display in the context drawer.
@@ -177,14 +127,9 @@ impl cosmic::Application for AppModel {
             key_binds: HashMap::new(),
             config,
             new_pattern: String::new(),
-            is_engaged: false,
-            saved_limits: None,
-            matched_processes: Vec::new(),
-            last_error: None,
             connection_status: None,
             throttle_dl_input,
             throttle_ul_input,
-            tray: None,
         };
 
         let command = app.update_title();
@@ -234,68 +179,13 @@ impl cosmic::Application for AppModel {
     }
 
     fn subscription(&self) -> Subscription<Self::Message> {
-        let mut subscriptions = vec![
-            self.core()
-                .watch_config::<Config>(Self::APP_ID)
-                .map(|update| Message::UpdateConfig(update.config)),
-            // Intercept window close requests so the app hides to the tray.
-            cosmic::iced::event::listen_with(|event, _status, id| match event {
-                cosmic::iced::Event::Window(window::Event::CloseRequested) => {
-                    Some(Message::WindowCloseRequested(id))
-                }
-                _ => None,
-            }),
-            // System tray service: spawned once, forwards menu events to the app.
-            // Initial state is pushed by the app right after `TrayReady`.
-            Subscription::run(|| {
-                cosmic::iced::stream::channel(16, |mut output: mpsc::Sender<Message>| async move {
-                    let (tx, mut rx) = mpsc::unbounded::<TrayEvent>();
-                    let tray = QbitTray {
-                        enabled: false,
-                        engaged: false,
-                        status_text: String::new(),
-                        throttle_text: None,
-                        error_text: None,
-                        tx,
-                    };
-
-                    match tray.spawn().await {
-                        Ok(handle) => {
-                            let _ = output.send(Message::TrayReady(TrayHandle(handle))).await;
-                        }
-                        Err(err) => {
-                            eprintln!("failed to spawn system tray: {err}");
-                        }
-                    }
-
-                    while let Some(event) = rx.next().await {
-                        let _ = output.send(Message::TrayEvent(event)).await;
-                    }
-
-                    std::future::pending::<()>().await;
-                })
-            }),
-        ];
-
-        if self.config.enabled && !self.config.patterns.is_empty() {
-            let interval_secs = self.config.poll_interval_secs.max(5);
-            subscriptions.push(
-                cosmic::iced::time::every(Duration::from_secs(interval_secs))
-                    .map(|_| Message::Tick),
-            );
-        }
-
-        Subscription::batch(subscriptions)
+        self.core()
+            .watch_config::<Config>(Self::APP_ID)
+            .map(|update| Message::UpdateConfig(update.config))
     }
 
     fn update(&mut self, message: Self::Message) -> Task<cosmic::Action<Self::Message>> {
-        let before = self.tray_snapshot();
-        let task = self.handle_message(message);
-        if self.tray_snapshot() == before {
-            task
-        } else {
-            Task::batch([task, self.sync_tray()])
-        }
+        self.handle_message(message)
     }
 }
 
@@ -359,21 +249,12 @@ impl AppModel {
             }
 
             Message::ToggleEnabled(enabled) => {
+                // The applet watches the config and engages/disengages itself.
                 self.config.enabled = enabled;
                 self.save_config();
-
-                if !enabled && self.is_engaged {
-                    return self.disengage();
-                }
             }
 
             Message::SetActionMode(mode) => {
-                // If we're currently engaged and the mode changes, disengage first
-                if self.is_engaged && self.config.action_mode != mode {
-                    self.config.action_mode = mode;
-                    self.save_config();
-                    return self.disengage();
-                }
                 self.config.action_mode = mode;
                 self.save_config();
             }
@@ -416,142 +297,6 @@ impl AppModel {
                     self.connection_status = Some(ConnectionStatus::Failed(e));
                 }
             },
-
-            Message::TrayReady(TrayHandle(handle)) => {
-                self.tray = Some(handle);
-                return self.sync_tray();
-            }
-
-            Message::TrayEvent(event) => match event {
-                TrayEvent::ToggleMonitoring(enabled) => {
-                    return self.handle_message(Message::ToggleEnabled(enabled));
-                }
-                TrayEvent::ShowWindow => return self.show_window(),
-                TrayEvent::Quit => {
-                    // Best-effort restore of torrents before exiting.
-                    if self.is_engaged {
-                        return self.disengage().chain(cosmic::iced::exit());
-                    }
-                    return cosmic::iced::exit();
-                }
-            },
-
-            Message::WindowCloseRequested(id) => {
-                if self.core.main_window_id() == Some(id) {
-                    if self.tray.is_some() {
-                        // Hide to tray: close the window but keep running.
-                        self.core.set_main_window_id(None);
-                        return window::close(id);
-                    }
-                    // No tray available, so closing the window quits the app.
-                    return cosmic::iced::exit();
-                }
-                return window::close(id);
-            }
-
-            Message::NoOp => {}
-
-            Message::MonitorTick(result) => {
-                self.matched_processes = result.matched_processes;
-                self.last_error = result.error;
-
-                // Store saved limits if provided (captured before throttling)
-                if let Some(limits) = result.saved_limits {
-                    self.saved_limits = Some(limits);
-                }
-
-                match result.action_taken {
-                    ActionTaken::Paused | ActionTaken::Throttled => self.is_engaged = true,
-                    ActionTaken::Resumed | ActionTaken::Unthrottled => {
-                        self.is_engaged = false;
-                        self.saved_limits = None;
-                    }
-                    ActionTaken::None => {}
-                }
-            }
-
-            Message::Tick => {
-                if !self.config.enabled || self.config.patterns.is_empty() {
-                    return Task::none();
-                }
-
-                let patterns = self.config.patterns.clone();
-                let url = self.config.qbit_url.clone();
-                let user = self.config.qbit_username.clone();
-                let pass = self.config.qbit_password.clone();
-                let was_engaged = self.is_engaged;
-                let action_mode = self.config.action_mode.clone();
-                let throttle_dl_bytes = self.config.throttle_download_kbps * 1024;
-                let throttle_ul_bytes = self.config.throttle_upload_kbps * 1024;
-                let saved_limits = self.saved_limits.clone();
-
-                return cosmic::task::future(async move {
-                    let mut monitor = ProcessMonitor::new();
-                    let matched = monitor.check_patterns(&patterns);
-                    let has_matches = !matched.is_empty();
-
-                    let (action, new_saved_limits, error) =
-                        if has_matches && !was_engaged {
-                            let client = QbitClient::new(&url, &user, &pass);
-                            match action_mode {
-                                ActionMode::Pause => match client.pause_all().await {
-                                    Ok(()) => (ActionTaken::Paused, None, None),
-                                    Err(e) => (ActionTaken::None, None, Some(e.to_string())),
-                                },
-                                ActionMode::Throttle => {
-                                    // Save current limits before applying throttle
-                                    match client.get_speed_limits().await {
-                                        Ok(current) => {
-                                            let target = SpeedLimits {
-                                                download: throttle_dl_bytes,
-                                                upload: throttle_ul_bytes,
-                                            };
-                                            match client.set_speed_limits(&target).await {
-                                                Ok(()) => {
-                                                    (ActionTaken::Throttled, Some(current), None)
-                                                }
-                                                Err(e) => {
-                                                    (ActionTaken::None, None, Some(e.to_string()))
-                                                }
-                                            }
-                                        }
-                                        Err(e) => (ActionTaken::None, None, Some(e.to_string())),
-                                    }
-                                }
-                            }
-                        } else if !has_matches && was_engaged {
-                            let client = QbitClient::new(&url, &user, &pass);
-                            match action_mode {
-                                ActionMode::Pause => match client.resume_all().await {
-                                    Ok(()) => (ActionTaken::Resumed, None, None),
-                                    Err(e) => (ActionTaken::None, None, Some(e.to_string())),
-                                },
-                                ActionMode::Throttle => {
-                                    // Restore previously saved limits
-                                    let restore = saved_limits.unwrap_or(SpeedLimits {
-                                        download: 0,
-                                        upload: 0,
-                                    });
-                                    match client.set_speed_limits(&restore).await {
-                                        Ok(()) => (ActionTaken::Unthrottled, None, None),
-                                        Err(e) => {
-                                            (ActionTaken::None, None, Some(e.to_string()))
-                                        }
-                                    }
-                                }
-                            }
-                        } else {
-                            (ActionTaken::None, None, None)
-                        };
-
-                    Message::MonitorTick(MonitorResult {
-                        matched_processes: matched,
-                        action_taken: action,
-                        saved_limits: new_saved_limits,
-                        error,
-                    })
-                });
-            }
         }
 
         Task::none()
@@ -575,133 +320,15 @@ impl AppModel {
         }
     }
 
-    /// Snapshot of the state mirrored to the tray, used to detect changes.
-    fn tray_snapshot(&self) -> (bool, bool, String, Option<String>, Option<String>) {
-        (
-            self.config.enabled,
-            self.is_engaged,
-            self.tray_status_text(),
-            self.tray_throttle_text(),
-            self.tray_error_text(),
-        )
-    }
-
-    fn tray_status_text(&self) -> String {
+    /// Config-derived monitoring status shown under the toggle in Settings.
+    fn monitoring_description(&self) -> String {
         if !self.config.enabled {
             fl!("status-disabled")
         } else if self.config.patterns.is_empty() {
             fl!("status-no-patterns")
-        } else if self.is_engaged {
-            let mut text = match self.config.action_mode {
-                ActionMode::Pause => fl!("status-paused"),
-                ActionMode::Throttle => fl!("status-throttled"),
-            };
-            if !self.matched_processes.is_empty() {
-                text.push_str(" (");
-                text.push_str(&self.matched_processes.join(", "));
-                text.push(')');
-            }
-            text
         } else {
-            fl!("status-running")
+            fl!("monitoring-description")
         }
-    }
-
-    fn tray_throttle_text(&self) -> Option<String> {
-        (self.config.action_mode == ActionMode::Throttle).then(|| {
-            fl!(
-                "tray-throttle-limits",
-                down = self.config.throttle_download_kbps.to_string(),
-                up = self.config.throttle_upload_kbps.to_string()
-            )
-        })
-    }
-
-    fn tray_error_text(&self) -> Option<String> {
-        self.last_error
-            .as_ref()
-            .map(|error| fl!("error-message", error = error.as_str()))
-    }
-
-    /// Push the current state to the tray icon and menu.
-    fn sync_tray(&self) -> Task<cosmic::Action<Message>> {
-        let Some(handle) = self.tray.clone() else {
-            return Task::none();
-        };
-        let enabled = self.config.enabled;
-        let engaged = self.is_engaged;
-        let status_text = self.tray_status_text();
-        let throttle_text = self.tray_throttle_text();
-        let error_text = self.tray_error_text();
-
-        cosmic::task::future(async move {
-            handle
-                .update(|tray| {
-                    tray.enabled = enabled;
-                    tray.engaged = engaged;
-                    tray.status_text = status_text;
-                    tray.throttle_text = throttle_text;
-                    tray.error_text = error_text;
-                })
-                .await;
-            Message::NoOp
-        })
-    }
-
-    /// Focus the main window, reopening it if it was closed to the tray.
-    fn show_window(&mut self) -> Task<cosmic::Action<Message>> {
-        if let Some(id) = self.core.main_window_id() {
-            return window::gain_focus(id);
-        }
-
-        let (id, task) = window::open(window::Settings {
-            size: cosmic::iced::Size::new(700.0, 600.0),
-            min_size: Some(cosmic::iced::Size::new(400.0, 300.0)),
-            decorations: false,
-            transparent: true,
-            exit_on_close_request: false,
-            #[cfg(target_os = "linux")]
-            platform_specific: window::settings::PlatformSpecific {
-                application_id: <AppModel as cosmic::Application>::APP_ID.to_string(),
-                ..Default::default()
-            },
-            ..Default::default()
-        });
-        self.core.set_main_window_id(Some(id));
-        Task::batch([task.map(|_| cosmic::Action::None), self.update_title()])
-    }
-
-    /// Disengage: resume torrents or restore speed limits depending on current mode.
-    fn disengage(&mut self) -> Task<cosmic::Action<Message>> {
-        let url = self.config.qbit_url.clone();
-        let user = self.config.qbit_username.clone();
-        let pass = self.config.qbit_password.clone();
-        let action_mode = self.config.action_mode.clone();
-        let saved_limits = self.saved_limits.clone();
-
-        cosmic::task::future(async move {
-            let client = QbitClient::new(&url, &user, &pass);
-            let (action, error) = match action_mode {
-                ActionMode::Pause => match client.resume_all().await {
-                    Ok(()) => (ActionTaken::Resumed, None),
-                    Err(e) => (ActionTaken::None, Some(e.to_string())),
-                },
-                ActionMode::Throttle => {
-                    let restore =
-                        saved_limits.unwrap_or(SpeedLimits { download: 0, upload: 0 });
-                    match client.set_speed_limits(&restore).await {
-                        Ok(()) => (ActionTaken::Unthrottled, None),
-                        Err(e) => (ActionTaken::None, Some(e.to_string())),
-                    }
-                }
-            };
-            Message::MonitorTick(MonitorResult {
-                matched_processes: Vec::new(),
-                action_taken: action,
-                saved_limits: None,
-                error,
-            })
-        })
     }
 
     fn view_settings(&self, space_s: u16) -> Element<'_, Message> {
@@ -711,10 +338,10 @@ impl AppModel {
 
         content = content.push(widget::text::title3(fl!("settings-title")));
 
-        // Monitoring toggle, mirrored with the tray menu.
+        // Monitoring toggle, mirrored with the panel applet.
         let monitoring_section = widget::settings::section().add(
             widget::settings::item::builder(fl!("monitoring"))
-                .description(self.tray_status_text())
+                .description(self.monitoring_description())
                 .control(widget::toggler(self.config.enabled).on_toggle(Message::ToggleEnabled)),
         );
         content = content.push(monitoring_section);

@@ -7,7 +7,7 @@ A COSMIC desktop application that monitors running processes and automatically p
 - **Process Monitoring**: Scans running processes every 30 seconds for configurable name patterns
 - **Auto-Pause**: Pauses all qBittorrent downloads when a matching process is detected
 - **Auto-Resume**: Resumes downloads when no matching processes are running
-- **Tray-First**: Lives in the system tray (StatusNotifierItem); clicking the icon opens a menu with a monitoring toggle and live status/throttle info, just like the COSMIC Wi-Fi and Bluetooth applets. The app window only hosts settings and closes to the tray
+- **Panel Applet**: A native COSMIC panel applet (like Wi-Fi/Bluetooth) whose popup has a real toggle switch for monitoring plus live status and throttle info. The settings window is a separate view launched from the popup
 - **COSMIC Native**: Built with libcosmic for native integration with the COSMIC desktop
 - **Configurable**: Set qBittorrent API connection details and process patterns through the GUI
 - **i18n Ready**: Uses Fluent for internationalization
@@ -35,16 +35,22 @@ just build-release
 just install
 ```
 
+This installs the binary plus two desktop entries: the settings application and
+the panel applet (`com.github.cosmic-qbit-remote.Applet`). Add the applet to
+your panel via **COSMIC Settings → Desktop → Panel → Configure panel applets**.
+
 ## Running
 
-```bash
-just run
-```
-
-Or directly:
+The settings window:
 
 ```bash
 cargo run --release
+```
+
+The panel applet (normally launched by the panel itself):
+
+```bash
+cargo run --release -- --applet
 ```
 
 ## Configuration
