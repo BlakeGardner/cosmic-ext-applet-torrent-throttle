@@ -49,3 +49,9 @@ patterns-description = The action is applied while any process matching these pa
 pattern-placeholder = e.g. steam, firefox
 add = Add
 remove = Remove
+
+# Tray
+tray-monitoring = Monitoring
+tray-show-window = Show window
+tray-quit = Quit
+tray-throttle-limits = Throttle: {$down} KB/s down / {$up} KB/s up

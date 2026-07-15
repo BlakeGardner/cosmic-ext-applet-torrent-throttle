@@ -4,12 +4,15 @@ use crate::config::{ActionMode, Config};
 use crate::fl;
 use crate::monitor::ProcessMonitor;
 use crate::qbit::{QbitClient, SpeedLimits};
+use crate::tray::{QbitTray, TrayEvent};
 use cosmic::app::context_drawer;
 use cosmic::cosmic_config::{self, CosmicConfigEntry};
 use cosmic::iced::alignment::Horizontal;
-use cosmic::iced::{Alignment, Color, Length, Subscription};
+use cosmic::iced::futures::{SinkExt, StreamExt, channel::mpsc};
+use cosmic::iced::{Alignment, Color, Length, Subscription, window};
 use cosmic::prelude::*;
 use cosmic::widget::{self, about::About, menu, nav_bar};
+use ksni::TrayMethods;
 use std::collections::HashMap;
 use std::time::Duration;
 
@@ -35,6 +38,8 @@ pub struct AppModel {
     // Temporary text fields for throttle settings
     throttle_dl_input: String,
     throttle_ul_input: String,
+    /// Handle to the system tray, once it has been spawned.
+    tray: Option<ksni::Handle<QbitTray>>,
 }
 
 /// Messages emitted by the application and its widgets.
@@ -66,6 +71,22 @@ pub enum Message {
 
     // Connection test result
     ConnectionResult(Result<String, String>),
+
+    // System tray
+    TrayReady(TrayHandle),
+    TrayEvent(TrayEvent),
+    WindowCloseRequested(window::Id),
+    NoOp,
+}
+
+/// Wrapper so the tray handle can be carried inside a `Message`.
+#[derive(Clone)]
+pub struct TrayHandle(pub ksni::Handle<QbitTray>);
+
+impl std::fmt::Debug for TrayHandle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("TrayHandle")
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -184,6 +205,7 @@ impl cosmic::Application for AppModel {
             connection_status: None,
             throttle_dl_input,
             throttle_ul_input,
+            tray: None,
         };
 
         let command = app.update_title();
@@ -246,6 +268,42 @@ impl cosmic::Application for AppModel {
             self.core()
                 .watch_config::<Config>(Self::APP_ID)
                 .map(|update| Message::UpdateConfig(update.config)),
+            // Intercept window close requests so the app hides to the tray.
+            cosmic::iced::event::listen_with(|event, _status, id| match event {
+                cosmic::iced::Event::Window(window::Event::CloseRequested) => {
+                    Some(Message::WindowCloseRequested(id))
+                }
+                _ => None,
+            }),
+            // System tray service: spawned once, forwards menu events to the app.
+            // Initial state is pushed by the app right after `TrayReady`.
+            Subscription::run(|| {
+                cosmic::iced::stream::channel(16, |mut output: mpsc::Sender<Message>| async move {
+                    let (tx, mut rx) = mpsc::unbounded::<TrayEvent>();
+                    let tray = QbitTray {
+                        enabled: false,
+                        engaged: false,
+                        status_text: String::new(),
+                        throttle_text: None,
+                        tx,
+                    };
+
+                    match tray.spawn().await {
+                        Ok(handle) => {
+                            let _ = output.send(Message::TrayReady(TrayHandle(handle))).await;
+                        }
+                        Err(err) => {
+                            eprintln!("failed to spawn system tray: {err}");
+                        }
+                    }
+
+                    while let Some(event) = rx.next().await {
+                        let _ = output.send(Message::TrayEvent(event)).await;
+                    }
+
+                    std::future::pending::<()>().await;
+                })
+            }),
         ];
 
         if self.config.enabled && !self.config.patterns.is_empty() {
@@ -260,6 +318,23 @@ impl cosmic::Application for AppModel {
     }
 
     fn update(&mut self, message: Self::Message) -> Task<cosmic::Action<Self::Message>> {
+        let before = self.tray_snapshot();
+        let task = self.handle_message(message);
+        if self.tray_snapshot() == before {
+            task
+        } else {
+            Task::batch([task, self.sync_tray()])
+        }
+    }
+
+    fn on_nav_select(&mut self, id: nav_bar::Id) -> Task<cosmic::Action<Self::Message>> {
+        self.nav.activate(id);
+        self.update_title()
+    }
+}
+
+impl AppModel {
+    fn handle_message(&mut self, message: Message) -> Task<cosmic::Action<Message>> {
         match message {
             Message::LaunchUrl(url) => {
                 let _ = open::that_detached(&url);
@@ -376,6 +451,40 @@ impl cosmic::Application for AppModel {
                 }
             },
 
+            Message::TrayReady(TrayHandle(handle)) => {
+                self.tray = Some(handle);
+                return self.sync_tray();
+            }
+
+            Message::TrayEvent(event) => match event {
+                TrayEvent::ToggleMonitoring(enabled) => {
+                    return self.handle_message(Message::ToggleEnabled(enabled));
+                }
+                TrayEvent::ShowWindow => return self.show_window(),
+                TrayEvent::Quit => {
+                    // Best-effort restore of torrents before exiting.
+                    if self.is_engaged {
+                        return self.disengage().chain(cosmic::iced::exit());
+                    }
+                    return cosmic::iced::exit();
+                }
+            },
+
+            Message::WindowCloseRequested(id) => {
+                if self.core.main_window_id() == Some(id) {
+                    if self.tray.is_some() {
+                        // Hide to tray: close the window but keep running.
+                        self.core.set_main_window_id(None);
+                        return window::close(id);
+                    }
+                    // No tray available, so closing the window quits the app.
+                    return cosmic::iced::exit();
+                }
+                return window::close(id);
+            }
+
+            Message::NoOp => {}
+
             Message::MonitorTick(result) => {
                 self.matched_processes = result.matched_processes;
                 self.last_error = result.error;
@@ -482,13 +591,6 @@ impl cosmic::Application for AppModel {
         Task::none()
     }
 
-    fn on_nav_select(&mut self, id: nav_bar::Id) -> Task<cosmic::Action<Self::Message>> {
-        self.nav.activate(id);
-        self.update_title()
-    }
-}
-
-impl AppModel {
     fn update_title(&mut self) -> Task<cosmic::Action<Message>> {
         let mut window_title = fl!("app-title");
 
@@ -512,6 +614,87 @@ impl AppModel {
                 eprintln!("failed to save config: {err}");
             }
         }
+    }
+
+    /// Snapshot of the state mirrored to the tray, used to detect changes.
+    fn tray_snapshot(&self) -> (bool, bool, String, Option<String>) {
+        (
+            self.config.enabled,
+            self.is_engaged,
+            self.tray_status_text(),
+            self.tray_throttle_text(),
+        )
+    }
+
+    fn tray_status_text(&self) -> String {
+        if !self.config.enabled {
+            fl!("status-disabled")
+        } else if self.config.patterns.is_empty() {
+            fl!("status-no-patterns")
+        } else if self.is_engaged {
+            match self.config.action_mode {
+                ActionMode::Pause => fl!("status-paused"),
+                ActionMode::Throttle => fl!("status-throttled"),
+            }
+        } else {
+            fl!("status-running")
+        }
+    }
+
+    fn tray_throttle_text(&self) -> Option<String> {
+        (self.config.action_mode == ActionMode::Throttle).then(|| {
+            fl!(
+                "tray-throttle-limits",
+                down = self.config.throttle_download_kbps.to_string(),
+                up = self.config.throttle_upload_kbps.to_string()
+            )
+        })
+    }
+
+    /// Push the current state to the tray icon and menu.
+    fn sync_tray(&self) -> Task<cosmic::Action<Message>> {
+        let Some(handle) = self.tray.clone() else {
+            return Task::none();
+        };
+        let enabled = self.config.enabled;
+        let engaged = self.is_engaged;
+        let status_text = self.tray_status_text();
+        let throttle_text = self.tray_throttle_text();
+
+        cosmic::task::future(async move {
+            handle
+                .update(|tray| {
+                    tray.enabled = enabled;
+                    tray.engaged = engaged;
+                    tray.status_text = status_text;
+                    tray.throttle_text = throttle_text;
+                })
+                .await;
+            Message::NoOp
+        })
+    }
+
+    /// Focus the main window, reopening it if it was closed to the tray.
+    fn show_window(&mut self) -> Task<cosmic::Action<Message>> {
+        if let Some(id) = self.core.main_window_id() {
+            return window::gain_focus(id);
+        }
+
+        let (id, task) = window::open(window::Settings {
+            size: cosmic::iced::Size::new(1024.0, 768.0),
+            min_size: Some(cosmic::iced::Size::new(400.0, 300.0)),
+            decorations: false,
+            transparent: true,
+            exit_on_close_request: false,
+            #[cfg(target_os = "linux")]
+            platform_specific: window::settings::PlatformSpecific {
+                application_id: <AppModel as cosmic::Application>::APP_ID.to_string(),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+        self.core.set_main_window_id(Some(id));
+        Task::batch([task.map(|_| cosmic::Action::None), self.update_title()])
     }
 
     /// Disengage: resume torrents or restore speed limits depending on current mode.
