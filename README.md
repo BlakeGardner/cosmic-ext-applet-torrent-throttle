@@ -36,8 +36,10 @@ just install
 ```
 
 This installs the binary plus two desktop entries: the settings application and
-the panel applet (`com.github.cosmic-qbit-remote.Applet`). Add the applet to
-your panel via **COSMIC Settings → Desktop → Panel → Configure panel applets**.
+the panel applet (`com.github.cosmic-qbit-remote.Applet`). Launching the
+settings application adds the applet to your panel and starts it if it isn't
+already running; you can also place it manually via **COSMIC Settings →
+Desktop → Panel → Configure panel applets**.
 
 ## Running
 

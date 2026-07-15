@@ -20,6 +20,10 @@ fn main() -> cosmic::iced::Result {
         return applet::run();
     }
 
+    // The panel icon should be available whenever the app is used, even
+    // after the applet was quit; the panel won't respawn it on its own.
+    std::thread::spawn(applet::ensure_applet_running);
+
     // Settings for configuring the application window and iced runtime.
     let settings = cosmic::app::Settings::default().size_limits(
         cosmic::iced::Limits::NONE

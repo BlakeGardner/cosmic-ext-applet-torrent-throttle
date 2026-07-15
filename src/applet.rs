@@ -9,7 +9,7 @@ use crate::fl;
 use crate::qbit::SpeedLimits;
 use cosmic::app;
 use cosmic::applet::{menu_button, padded_control};
-use cosmic::cosmic_config::{self, CosmicConfigEntry};
+use cosmic::cosmic_config::{self, ConfigGet, ConfigSet, CosmicConfigEntry};
 use cosmic::cosmic_theme::Spacing;
 use cosmic::iced::platform_specific::shell::wayland::commands::popup::destroy_popup;
 use cosmic::iced::{Length, Subscription, window};
@@ -21,8 +21,118 @@ use std::time::Duration;
 /// Config ID shared with the settings application.
 const CONFIG_ID: &str = "com.github.cosmic-qbit-remote";
 
+/// Desktop entry ID the panel uses to spawn the applet.
+const APPLET_ID: &str = "com.github.cosmic-qbit-remote.Applet";
+
 pub fn run() -> cosmic::iced::Result {
     cosmic::applet::run::<QbitApplet>(())
+}
+
+/// Make sure the panel applet is running.
+///
+/// cosmic-panel spawns the applets listed in its config at startup but never
+/// respawns one that exited (e.g. via the applet's Quit action). When the
+/// settings app starts, add the applet to the panel on first run, or briefly
+/// remove and re-add its config entry so the panel spawns it again.
+pub fn ensure_applet_running() {
+    if applet_process_running() {
+        return;
+    }
+
+    let panels = cosmic_config::Config::new("com.system76.CosmicPanel", 1)
+        .ok()
+        .and_then(|config| config.get::<Vec<String>>("entries").ok())
+        .unwrap_or_else(|| vec![String::from("Panel")]);
+
+    let mut listed = false;
+    for panel in &panels {
+        let Ok(config) = cosmic_config::Config::new(&format!("com.system76.CosmicPanel.{panel}"), 1)
+        else {
+            continue;
+        };
+
+        let wings = config
+            .get::<Option<(Vec<String>, Vec<String>)>>("plugins_wings")
+            .ok()
+            .flatten();
+        if let Some(wings) = wings.filter(|(left, right)| {
+            left.iter().chain(right).any(|id| id == APPLET_ID)
+        }) {
+            listed = true;
+            let without = wings_without_applet(&wings);
+            respawn_via_toggle(&config, "plugins_wings", &Some(wings), &Some(without));
+            continue;
+        }
+
+        let center = config
+            .get::<Option<Vec<String>>>("plugins_center")
+            .ok()
+            .flatten();
+        if let Some(center) = center.filter(|ids| ids.iter().any(|id| id == APPLET_ID)) {
+            listed = true;
+            let without: Vec<String> =
+                center.iter().filter(|id| *id != APPLET_ID).cloned().collect();
+            respawn_via_toggle(&config, "plugins_center", &Some(center), &Some(without));
+        }
+    }
+
+    // First run: add the applet to the right wing of the first panel.
+    if !listed {
+        if let Some(panel) = panels.first() {
+            if let Ok(config) =
+                cosmic_config::Config::new(&format!("com.system76.CosmicPanel.{panel}"), 1)
+            {
+                let (left, mut right) = config
+                    .get::<Option<(Vec<String>, Vec<String>)>>("plugins_wings")
+                    .ok()
+                    .flatten()
+                    .unwrap_or_default();
+                right.insert(0, String::from(APPLET_ID));
+                let _ = config.set("plugins_wings", Some((left, right)));
+            }
+        }
+    }
+}
+
+fn wings_without_applet(wings: &(Vec<String>, Vec<String>)) -> (Vec<String>, Vec<String>) {
+    let strip = |ids: &[String]| ids.iter().filter(|id| *id != APPLET_ID).cloned().collect();
+    (strip(&wings.0), strip(&wings.1))
+}
+
+/// The panel only reacts to config changes, so write the plugin list without
+/// the applet, give the panel a moment to notice, then restore the original.
+fn respawn_via_toggle<T: serde::Serialize>(
+    config: &cosmic_config::Config,
+    key: &str,
+    original: &T,
+    without: &T,
+) {
+    if config.set(key, without).is_ok() {
+        std::thread::sleep(Duration::from_millis(1500));
+    }
+    let _ = config.set(key, original);
+}
+
+/// Whether any applet instance of this application is currently running.
+fn applet_process_running() -> bool {
+    let system = sysinfo::System::new_with_specifics(
+        sysinfo::RefreshKind::nothing().with_processes(
+            sysinfo::ProcessRefreshKind::nothing()
+                .with_exe(sysinfo::UpdateKind::OnlyIfNotSet)
+                .with_cmd(sysinfo::UpdateKind::OnlyIfNotSet),
+        ),
+    );
+    system.processes().values().any(|process| {
+        let name_matches = process
+            .exe()
+            .and_then(|exe| exe.file_name())
+            .is_some_and(|name| name == "cosmic-qbit-remote");
+        name_matches
+            && process
+                .cmd()
+                .iter()
+                .any(|arg| arg.to_str() == Some("--applet"))
+    })
 }
 
 /// The panel spawns one applet process per panel/output. Only the process
