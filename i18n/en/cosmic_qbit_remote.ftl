@@ -42,3 +42,4 @@ patterns-description = The action is applied while any process matching these pa
 pattern-placeholder = e.g. steam, firefox
 add = Add
 remove = Remove
+quit = Quit

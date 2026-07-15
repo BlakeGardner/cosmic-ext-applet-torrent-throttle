@@ -3,7 +3,7 @@
 //! Native COSMIC panel applet: a panel icon with a popup containing a real
 //! toggle switch, matching the Wi-Fi and Bluetooth applets.
 
-use crate::config::{ActionMode, Config};
+use crate::config::{ActionMode, Config, MonitorState};
 use crate::engine::{self, ActionTaken, MonitorResult};
 use crate::fl;
 use crate::qbit::SpeedLimits;
@@ -15,6 +15,7 @@ use cosmic::iced::platform_specific::shell::wayland::commands::popup::destroy_po
 use cosmic::iced::{Length, Subscription, window};
 use cosmic::widget::{divider, text, toggler};
 use cosmic::{Element, Task, theme};
+use cosmic::iced::futures::{SinkExt, channel::mpsc};
 use std::time::Duration;
 
 /// Config ID shared with the settings application.
@@ -24,10 +25,53 @@ pub fn run() -> cosmic::iced::Result {
     cosmic::applet::run::<QbitApplet>(())
 }
 
+/// The panel spawns one applet process per panel/output. Only the process
+/// holding this lock runs the monitoring engine; the others mirror its
+/// state via cosmic-config so every popup shows the same status.
+fn try_acquire_leadership() -> Option<std::fs::File> {
+    let dir = std::env::var_os("XDG_RUNTIME_DIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(std::env::temp_dir);
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(dir.join("cosmic-qbit-remote-applet.lock"))
+        .ok()?;
+    file.try_lock().ok().map(|()| file)
+}
+
+/// Send SIGTERM to every other applet instance so quitting one quits all.
+fn terminate_sibling_applets() {
+    let me = std::process::id() as usize;
+    let exe = std::env::current_exe().ok();
+    let system = sysinfo::System::new_with_specifics(
+        sysinfo::RefreshKind::nothing()
+            .with_processes(sysinfo::ProcessRefreshKind::nothing().with_exe(
+                sysinfo::UpdateKind::OnlyIfNotSet,
+            ).with_cmd(sysinfo::UpdateKind::OnlyIfNotSet)),
+    );
+    for (pid, process) in system.processes() {
+        if pid.as_u32() as usize == me {
+            continue;
+        }
+        let same_exe = exe.as_deref().is_some_and(|exe| process.exe() == Some(exe));
+        let is_applet = process
+            .cmd()
+            .iter()
+            .any(|arg| arg.to_str() == Some("--applet"));
+        if same_exe && is_applet {
+            process.kill_with(sysinfo::Signal::Term);
+        }
+    }
+}
+
 struct QbitApplet {
     core: cosmic::Core,
     popup: Option<window::Id>,
     config: Config,
+    /// Held for the process lifetime; `Some` means this instance runs the engine.
+    leader_lock: Option<std::fs::File>,
     is_engaged: bool,
     saved_limits: Option<SpeedLimits>,
     matched_processes: Vec<String>,
@@ -40,12 +84,18 @@ enum Message {
     CloseRequested(window::Id),
     ToggleMonitoring(bool),
     UpdateConfig(Config),
+    UpdateState(MonitorState),
     Tick,
     MonitorTick(MonitorResult),
     OpenSettings,
+    Quit,
 }
 
 impl QbitApplet {
+    fn is_leader(&self) -> bool {
+        self.leader_lock.is_some()
+    }
+
     fn icon_name(&self) -> &'static str {
         if !self.config.enabled {
             "network-disconnected-symbolic"
@@ -75,6 +125,20 @@ impl QbitApplet {
         if let Ok(context) = cosmic_config::Config::new(CONFIG_ID, Config::VERSION) {
             if let Err(err) = self.config.write_entry(&context) {
                 eprintln!("failed to save config: {err}");
+            }
+        }
+    }
+
+    /// Publish the leader's monitoring state so other instances mirror it.
+    fn save_state(&self) {
+        let state = MonitorState {
+            is_engaged: self.is_engaged,
+            matched_processes: self.matched_processes.clone(),
+            last_error: self.last_error.clone().unwrap_or_default(),
+        };
+        if let Ok(context) = cosmic_config::Config::new_state(CONFIG_ID, MonitorState::VERSION) {
+            if let Err(err) = state.write_entry(&context) {
+                eprintln!("failed to save monitor state: {err}");
             }
         }
     }
@@ -117,18 +181,35 @@ impl cosmic::Application for QbitApplet {
             })
             .unwrap_or_default();
 
-        (
-            Self {
-                core,
-                popup: None,
-                config,
-                is_engaged: false,
-                saved_limits: None,
-                matched_processes: Vec::new(),
-                last_error: None,
-            },
-            Task::none(),
-        )
+        let leader_lock = try_acquire_leadership();
+
+        // Followers adopt the leader's published state.
+        let state = if leader_lock.is_none() {
+            cosmic_config::Config::new_state(CONFIG_ID, MonitorState::VERSION)
+                .ok()
+                .and_then(|context| MonitorState::get_entry(&context).ok())
+                .unwrap_or_default()
+        } else {
+            MonitorState::default()
+        };
+
+        let applet = Self {
+            core,
+            popup: None,
+            config,
+            leader_lock,
+            is_engaged: state.is_engaged,
+            saved_limits: None,
+            matched_processes: state.matched_processes,
+            last_error: (!state.last_error.is_empty()).then_some(state.last_error),
+        };
+
+        // Reset any stale state left over from a previous leader.
+        if applet.is_leader() {
+            applet.save_state();
+        }
+
+        (applet, Task::none())
     }
 
     fn update(&mut self, message: Self::Message) -> app::Task<Self::Message> {
@@ -164,23 +245,36 @@ impl cosmic::Application for QbitApplet {
                 self.config.enabled = enabled;
                 self.save_config();
 
-                if !enabled && self.is_engaged {
+                if self.is_leader() && !enabled && self.is_engaged {
                     return self.disengage();
                 }
             }
 
             Message::UpdateConfig(config) => {
-                // If the mode changed while engaged, disengage with the old
-                // mode's semantics before adopting the new config.
-                if self.is_engaged && self.config.action_mode != config.action_mode {
-                    let task = self.disengage();
+                if self.is_leader() {
+                    // If the mode changed while engaged, disengage with the old
+                    // mode's semantics before adopting the new config.
+                    if self.is_engaged && self.config.action_mode != config.action_mode {
+                        let task = self.disengage();
+                        self.config = config;
+                        return task;
+                    }
+                    let disable = self.is_engaged && !config.enabled;
                     self.config = config;
-                    return task;
+                    if disable {
+                        return self.disengage();
+                    }
+                } else {
+                    self.config = config;
                 }
-                let disable = self.is_engaged && !config.enabled;
-                self.config = config;
-                if disable {
-                    return self.disengage();
+            }
+
+            Message::UpdateState(state) => {
+                // Mirror the leader's monitoring state.
+                if !self.is_leader() {
+                    self.is_engaged = state.is_engaged;
+                    self.matched_processes = state.matched_processes;
+                    self.last_error = (!state.last_error.is_empty()).then_some(state.last_error);
                 }
             }
 
@@ -212,6 +306,8 @@ impl cosmic::Application for QbitApplet {
                     }
                     ActionTaken::None => {}
                 }
+
+                self.save_state();
             }
 
             Message::OpenSettings => {
@@ -222,6 +318,18 @@ impl cosmic::Application for QbitApplet {
                 if let Some(popup) = self.popup.take() {
                     return destroy_popup(popup);
                 }
+            }
+
+            Message::Quit => {
+                // Quit every panel's instance, not just this one. Siblings
+                // receive SIGTERM, which they handle as their own Quit.
+                terminate_sibling_applets();
+
+                // Best-effort restore of torrents before exiting.
+                if self.is_leader() && self.is_engaged {
+                    return self.disengage().chain(cosmic::iced::exit());
+                }
+                return cosmic::iced::exit();
             }
         }
 
@@ -279,7 +387,8 @@ impl cosmic::Application for QbitApplet {
             .push(padded_control(divider::horizontal::default()).padding([space_xxs, space_s]))
             .push(
                 menu_button(text::body(fl!("settings-title"))).on_press(Message::OpenSettings),
-            );
+            )
+            .push(menu_button(text::body(fl!("quit"))).on_press(Message::Quit));
 
         self.core.applet.popup_container(content).into()
     }
@@ -289,13 +398,33 @@ impl cosmic::Application for QbitApplet {
             self.core()
                 .watch_config::<Config>(CONFIG_ID)
                 .map(|update| Message::UpdateConfig(update.config)),
+            // Quit gracefully on SIGTERM (e.g. when another instance quits).
+            Subscription::run(|| {
+                cosmic::iced::stream::channel(1, |mut output: mpsc::Sender<Message>| async move {
+                    if let Ok(mut term) =
+                        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+                    {
+                        term.recv().await;
+                        let _ = output.send(Message::Quit).await;
+                    }
+                    std::future::pending::<()>().await
+                })
+            }),
         ];
 
-        if self.config.enabled && !self.config.patterns.is_empty() {
-            let interval_secs = self.config.poll_interval_secs.max(5);
+        if self.is_leader() {
+            if self.config.enabled && !self.config.patterns.is_empty() {
+                let interval_secs = self.config.poll_interval_secs.max(5);
+                subscriptions.push(
+                    cosmic::iced::time::every(Duration::from_secs(interval_secs))
+                        .map(|_| Message::Tick),
+                );
+            }
+        } else {
             subscriptions.push(
-                cosmic::iced::time::every(Duration::from_secs(interval_secs))
-                    .map(|_| Message::Tick),
+                self.core()
+                    .watch_state::<MonitorState>(CONFIG_ID)
+                    .map(|update| Message::UpdateState(update.config)),
             );
         }
 

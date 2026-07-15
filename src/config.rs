@@ -2,6 +2,17 @@
 
 use cosmic::cosmic_config::{self, CosmicConfigEntry, cosmic_config_derive::CosmicConfigEntry};
 
+/// Runtime monitoring state, written by the leader applet instance and
+/// mirrored by the others (one applet process runs per panel/output).
+#[derive(Debug, Default, Clone, CosmicConfigEntry, Eq, PartialEq)]
+#[version = 1]
+pub struct MonitorState {
+    pub is_engaged: bool,
+    pub matched_processes: Vec<String>,
+    /// Empty string means no error.
+    pub last_error: String,
+}
+
 /// What action to take when a matching process is detected.
 #[derive(Debug, Default, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum ActionMode {
