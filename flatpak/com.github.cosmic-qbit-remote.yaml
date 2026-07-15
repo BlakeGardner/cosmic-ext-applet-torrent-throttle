@@ -1,6 +1,6 @@
 id: com.github.cosmic-qbit-remote
 runtime: org.freedesktop.Platform
-runtime-version: "24.08"
+runtime-version: "25.08"
 base: com.system76.Cosmic.BaseApp
 base-version: stable
 sdk: org.freedesktop.Sdk
@@ -9,14 +9,16 @@ sdk-extensions:
 command: cosmic-qbit-remote
 finish-args:
   - --share=ipc
+  # qBittorrent Web API access
   - --share=network
-  - --socket=fallback-x11
   - --socket=wayland
-  - --device=dri
   - --talk-name=com.system76.CosmicSettingsDaemon
   - --filesystem=xdg-config/cosmic:rw
-  # Read /proc to monitor running processes
-  - --filesystem=/proc:ro
+  # NOTE: Flatpak sandboxes use their own PID namespace, so sysinfo cannot
+  # see host processes. Before publishing a flatpak, process monitoring must
+  # be ported to `flatpak-spawn --host` (requires
+  # --talk-name=org.freedesktop.Flatpak) when running inside a sandbox.
+  - --talk-name=org.freedesktop.Flatpak
 build-options:
   append-path: /usr/lib/sdk/rust-stable/bin
   env:

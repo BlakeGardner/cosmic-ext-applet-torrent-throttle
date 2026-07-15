@@ -21,7 +21,7 @@ icon-svg := appid + '.svg'
 
 # Install destinations
 base-dir := absolute_path(clean(rootdir / prefix))
-appdata-dst := base-dir / 'share' / 'appdata' / appdata
+appdata-dst := base-dir / 'share' / 'metainfo' / appdata
 bin-dst := base-dir / 'bin' / name
 desktop-dst := base-dir / 'share' / 'applications' / desktop
 applet-desktop-dst := base-dir / 'share' / 'applications' / applet-desktop
@@ -73,7 +73,7 @@ install:
 
 # Uninstalls installed files
 uninstall:
-    rm {{bin-dst}} {{desktop-dst}} {{applet-desktop-dst}} {{icon-svg-dst}}
+    rm {{bin-dst}} {{desktop-dst}} {{applet-desktop-dst}} {{appdata-dst}} {{icon-svg-dst / icon-svg}}
 
 # Vendor dependencies locally
 vendor:

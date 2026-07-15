@@ -55,6 +55,20 @@ The panel applet (normally launched by the panel itself):
 cargo run --release -- --applet
 ```
 
+## Distributing via COSMIC Store
+
+The packaging follows the pattern used by applets in the COSMIC Store:
+
+- The AppStream metainfo declares `<provides><id>com.system76.CosmicApplet</id></provides>`,
+  which is what places an app in the store's **Applets** section.
+- Applets are distributed through the [COSMIC Flatpak repo](https://github.com/pop-os/cosmic-flatpak)
+  (not Flathub) — submit a PR adding `app/com.github.cosmic-qbit-remote/` with the
+  manifest from `flatpak/` plus a generated `cargo-sources.json`
+  ([flatpak-cargo-generator](https://github.com/flatpak/flatpak-builder-tools/tree/master/cargo)).
+- Before publishing a flatpak, process monitoring must be ported to
+  `flatpak-spawn --host` when sandboxed: flatpaks run in their own PID
+  namespace, so `sysinfo` cannot see host processes.
+
 ## Configuration
 
 Settings are stored via `cosmic-config` under the app ID `com.github.cosmic-qbit-remote`:

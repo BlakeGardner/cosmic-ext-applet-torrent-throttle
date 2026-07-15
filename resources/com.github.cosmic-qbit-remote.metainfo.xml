@@ -23,8 +23,13 @@
   <url type="homepage">https://github.com/YOUR_USERNAME/cosmic-qbit-remote</url>
   <url type="bugtracker">https://github.com/YOUR_USERNAME/cosmic-qbit-remote/issues</url>
   <url type="vcs-browser">https://github.com/YOUR_USERNAME/cosmic-qbit-remote</url>
+  <developer id="com.github.your-username">
+    <name>Blake Gardner</name>
+  </developer>
   <launchable type="desktop-id">com.github.cosmic-qbit-remote.desktop</launchable>
   <provides>
+    <!-- Marks this as a panel applet so COSMIC Store lists it under Applets. -->
+    <id>com.system76.CosmicApplet</id>
     <binary>cosmic-qbit-remote</binary>
   </provides>
   <requires>
