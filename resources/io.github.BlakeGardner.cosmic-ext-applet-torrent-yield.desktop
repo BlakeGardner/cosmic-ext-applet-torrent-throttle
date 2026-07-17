@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Torrent Yield
+Comment=Pause or throttle torrent downloads when specific programs are running
+Type=Application
+Icon=io.github.BlakeGardner.cosmic-ext-applet-torrent-yield
+Exec=cosmic-ext-applet-torrent-yield %F
+Terminal=false
+StartupNotify=true
+Categories=Utility;Network;
+Keywords=torrent;qbittorrent;bandwidth;cosmic;

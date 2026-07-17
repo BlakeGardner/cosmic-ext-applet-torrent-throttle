@@ -1,7 +1,7 @@
 # Name of the application's binary.
-name := 'cosmic-ext-applet-qbit-remote'
+name := 'cosmic-ext-applet-torrent-yield'
 # The unique ID of the application.
-appid := 'io.github.BlakeGardner.cosmic-ext-applet-qbit-remote'
+appid := 'io.github.BlakeGardner.cosmic-ext-applet-torrent-yield'
 
 # Path to root file system, which defaults to `/`.
 rootdir := ''

@@ -1,4 +1,4 @@
-app-title = qBit Remote
+app-title = Torrent Yield
 about = About
 view = View
 repository = Repository
