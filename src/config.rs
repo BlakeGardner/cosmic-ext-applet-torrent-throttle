@@ -13,6 +13,16 @@ pub struct MonitorState {
     pub last_error: String,
 }
 
+/// Quit broadcast, written by whichever applet instance the user quit from
+/// and watched by all instances (SIGTERM cannot cross Flatpak sandboxes).
+#[derive(Debug, Default, Clone, CosmicConfigEntry, Eq, PartialEq)]
+#[version = 1]
+pub struct QuitSignal {
+    /// Milliseconds since the Unix epoch; instances started before this
+    /// moment quit when they observe it.
+    pub quit_at_millis: u64,
+}
+
 /// What action to take when a matching process is detected.
 #[derive(Debug, Default, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum ActionMode {

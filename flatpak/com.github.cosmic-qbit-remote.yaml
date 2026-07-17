@@ -14,10 +14,9 @@ finish-args:
   - --socket=wayland
   - --talk-name=com.system76.CosmicSettingsDaemon
   - --filesystem=xdg-config/cosmic:rw
-  # NOTE: Flatpak sandboxes use their own PID namespace, so sysinfo cannot
-  # see host processes. Before publishing a flatpak, process monitoring must
-  # be ported to `flatpak-spawn --host` (requires
-  # --talk-name=org.freedesktop.Flatpak) when running inside a sandbox.
+  # Host process monitoring via `flatpak-spawn --host ps` (sandboxes have
+  # their own PID namespace, so sysinfo cannot see host processes). Same
+  # pattern as other applets in the COSMIC Flatpak repo (e.g. minimon).
   - --talk-name=org.freedesktop.Flatpak
 build-options:
   append-path: /usr/lib/sdk/rust-stable/bin

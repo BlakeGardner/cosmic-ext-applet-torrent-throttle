@@ -65,9 +65,12 @@ The packaging follows the pattern used by applets in the COSMIC Store:
   (not Flathub) — submit a PR adding `app/com.github.cosmic-qbit-remote/` with the
   manifest from `flatpak/` plus a generated `cargo-sources.json`
   ([flatpak-cargo-generator](https://github.com/flatpak/flatpak-builder-tools/tree/master/cargo)).
-- Before publishing a flatpak, process monitoring must be ported to
-  `flatpak-spawn --host` when sandboxed: flatpaks run in their own PID
-  namespace, so `sysinfo` cannot see host processes.
+- Sandbox support is built in: when running inside Flatpak, process
+  monitoring uses `flatpak-spawn --host ps` (enabled by
+  `--talk-name=org.freedesktop.Flatpak`, the same pattern used by other
+  applets in the COSMIC Flatpak repo), and cross-instance coordination
+  (leader election, quit) uses the Flatpak per-app shared runtime
+  directory and cosmic-config state instead of signals.
 
 ## Configuration
 

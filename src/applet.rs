@@ -3,7 +3,7 @@
 //! Native COSMIC panel applet: a panel icon with a popup containing a real
 //! toggle switch, matching the Wi-Fi and Bluetooth applets.
 
-use crate::config::{ActionMode, Config, MonitorState};
+use crate::config::{ActionMode, Config, MonitorState, QuitSignal};
 use crate::engine::{self, ActionTaken, MonitorResult};
 use crate::fl;
 use crate::qbit::SpeedLimits;
@@ -113,35 +113,22 @@ fn respawn_via_toggle<T: serde::Serialize>(
     let _ = config.set(key, original);
 }
 
-/// Whether any applet instance of this application is currently running.
+/// Whether any applet instance of this application is currently running,
+/// detected by probing the leader lock (works from inside a Flatpak
+/// sandbox, where other instances' processes are invisible).
 fn applet_process_running() -> bool {
-    let system = sysinfo::System::new_with_specifics(
-        sysinfo::RefreshKind::nothing().with_processes(
-            sysinfo::ProcessRefreshKind::nothing()
-                .with_exe(sysinfo::UpdateKind::OnlyIfNotSet)
-                .with_cmd(sysinfo::UpdateKind::OnlyIfNotSet),
-        ),
-    );
-    system.processes().values().any(|process| {
-        let name_matches = process
-            .exe()
-            .and_then(|exe| exe.file_name())
-            .is_some_and(|name| name == "cosmic-qbit-remote");
-        name_matches
-            && process
-                .cmd()
-                .iter()
-                .any(|arg| arg.to_str() == Some("--applet"))
-    })
+    // If the lock can be acquired no leader is running. A running follower
+    // without a leader can only happen after a leader crash, and the
+    // respawn toggle below replaces those instances anyway.
+    try_acquire_leadership().is_none()
 }
 
 /// The panel spawns one applet process per panel/output. Only the process
 /// holding this lock runs the monitoring engine; the others mirror its
 /// state via cosmic-config so every popup shows the same status.
 fn try_acquire_leadership() -> Option<std::fs::File> {
-    let dir = std::env::var_os("XDG_RUNTIME_DIR")
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(std::env::temp_dir);
+    let dir = crate::sandbox::shared_runtime_dir();
+    let _ = std::fs::create_dir_all(&dir);
     let file = std::fs::OpenOptions::new()
         .create(true)
         .truncate(false)
@@ -151,29 +138,22 @@ fn try_acquire_leadership() -> Option<std::fs::File> {
     file.try_lock().ok().map(|()| file)
 }
 
-/// Send SIGTERM to every other applet instance so quitting one quits all.
-fn terminate_sibling_applets() {
-    let me = std::process::id() as usize;
-    let exe = std::env::current_exe().ok();
-    let system = sysinfo::System::new_with_specifics(
-        sysinfo::RefreshKind::nothing()
-            .with_processes(sysinfo::ProcessRefreshKind::nothing().with_exe(
-                sysinfo::UpdateKind::OnlyIfNotSet,
-            ).with_cmd(sysinfo::UpdateKind::OnlyIfNotSet)),
-    );
-    for (pid, process) in system.processes() {
-        if pid.as_u32() as usize == me {
-            continue;
-        }
-        let same_exe = exe.as_deref().is_some_and(|exe| process.exe() == Some(exe));
-        let is_applet = process
-            .cmd()
-            .iter()
-            .any(|arg| arg.to_str() == Some("--applet"));
-        if same_exe && is_applet {
-            process.kill_with(sysinfo::Signal::Term);
-        }
+/// Broadcast a quit to every applet instance via cosmic-config state.
+/// Unlike signals, this crosses Flatpak sandbox boundaries.
+fn broadcast_quit() {
+    let signal = QuitSignal {
+        quit_at_millis: now_millis(),
+    };
+    if let Ok(context) = cosmic_config::Config::new_state(CONFIG_ID, QuitSignal::VERSION) {
+        let _ = signal.write_entry(&context);
     }
+}
+
+fn now_millis() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_millis() as u64)
+        .unwrap_or_default()
 }
 
 struct QbitApplet {
@@ -182,6 +162,8 @@ struct QbitApplet {
     config: Config,
     /// Held for the process lifetime; `Some` means this instance runs the engine.
     leader_lock: Option<std::fs::File>,
+    /// Used to ignore quit broadcasts that predate this instance.
+    started_at_millis: u64,
     is_engaged: bool,
     saved_limits: Option<SpeedLimits>,
     matched_processes: Vec<String>,
@@ -195,6 +177,7 @@ enum Message {
     ToggleMonitoring(bool),
     UpdateConfig(Config),
     UpdateState(MonitorState),
+    QuitRequested(QuitSignal),
     Tick,
     MonitorTick(MonitorResult),
     OpenSettings,
@@ -308,6 +291,7 @@ impl cosmic::Application for QbitApplet {
             popup: None,
             config,
             leader_lock,
+            started_at_millis: now_millis(),
             is_engaged: state.is_engaged,
             saved_limits: None,
             matched_processes: state.matched_processes,
@@ -430,10 +414,21 @@ impl cosmic::Application for QbitApplet {
                 }
             }
 
+            Message::QuitRequested(signal) => {
+                // Another instance quit; follow suit, but ignore stale
+                // broadcasts left over from a previous session.
+                if signal.quit_at_millis > self.started_at_millis {
+                    if self.is_leader() && self.is_engaged {
+                        return self.disengage().chain(cosmic::iced::exit());
+                    }
+                    return cosmic::iced::exit();
+                }
+            }
+
             Message::Quit => {
-                // Quit every panel's instance, not just this one. Siblings
-                // receive SIGTERM, which they handle as their own Quit.
-                terminate_sibling_applets();
+                // Quit every panel's instance, not just this one. The
+                // broadcast reaches siblings even across Flatpak sandboxes.
+                broadcast_quit();
 
                 // Best-effort restore of torrents before exiting.
                 if self.is_leader() && self.is_engaged {
@@ -508,7 +503,7 @@ impl cosmic::Application for QbitApplet {
             self.core()
                 .watch_config::<Config>(CONFIG_ID)
                 .map(|update| Message::UpdateConfig(update.config)),
-            // Quit gracefully on SIGTERM (e.g. when another instance quits).
+            // Quit gracefully on SIGTERM (e.g. panel shutdown).
             Subscription::run(|| {
                 cosmic::iced::stream::channel(1, |mut output: mpsc::Sender<Message>| async move {
                     if let Ok(mut term) =
@@ -520,6 +515,10 @@ impl cosmic::Application for QbitApplet {
                     std::future::pending::<()>().await
                 })
             }),
+            // Quit when any other instance broadcasts a quit.
+            self.core()
+                .watch_state::<QuitSignal>(CONFIG_ID)
+                .map(|update| Message::QuitRequested(update.config)),
         ];
 
         if self.is_leader() {
