@@ -90,7 +90,7 @@ impl cosmic::Application for AppModel {
     type Flags = ();
     type Message = Message;
 
-    const APP_ID: &'static str = "com.github.cosmic-qbit-remote";
+    const APP_ID: &'static str = "io.github.BlakeGardner.cosmic-ext-applet-qbit-remote";
 
     fn core(&self) -> &cosmic::Core {
         &self.core

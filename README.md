@@ -1,6 +1,8 @@
-# cosmic-qbit-remote
+# cosmic-ext-applet-qbit-remote
 
-A COSMIC desktop application that monitors running processes and automatically pauses/resumes qBittorrent downloads based on configurable process name patterns.
+qBit Remote for the COSMIC™ desktop — a panel applet that monitors running processes and automatically pauses/resumes qBittorrent downloads based on configurable process name patterns.
+
+COSMIC™ is a trademark of System76. This is a third-party application and is not affiliated with or endorsed by System76.
 
 ## Features
 
@@ -36,7 +38,7 @@ just install
 ```
 
 This installs the binary plus two desktop entries: the settings application and
-the panel applet (`com.github.cosmic-qbit-remote.Applet`). Launching the
+the panel applet (`io.github.BlakeGardner.cosmic-ext-applet-qbit-remote.Applet`). Launching the
 settings application adds the applet to your panel and starts it if it isn't
 already running; you can also place it manually via **COSMIC Settings →
 Desktop → Panel → Configure panel applets**.
@@ -62,7 +64,7 @@ The packaging follows the pattern used by applets in the COSMIC Store:
 - The AppStream metainfo declares `<provides><id>com.system76.CosmicApplet</id></provides>`,
   which is what places an app in the store's **Applets** section.
 - Applets are distributed through the [COSMIC Flatpak repo](https://github.com/pop-os/cosmic-flatpak)
-  (not Flathub) — submit a PR adding `app/com.github.cosmic-qbit-remote/` with the
+  (not Flathub) — submit a PR adding `app/io.github.BlakeGardner.cosmic-ext-applet-qbit-remote/` with the
   manifest from `flatpak/` plus a generated `cargo-sources.json`
   ([flatpak-cargo-generator](https://github.com/flatpak/flatpak-builder-tools/tree/master/cargo)).
 - Sandbox support is built in: when running inside Flatpak, process
@@ -74,7 +76,7 @@ The packaging follows the pattern used by applets in the COSMIC Store:
 
 ## Configuration
 
-Settings are stored via `cosmic-config` under the app ID `com.github.cosmic-qbit-remote`:
+Settings are stored via `cosmic-config` under the app ID `io.github.BlakeGardner.cosmic-ext-applet-qbit-remote`:
 
 - **qBittorrent URL**: The Web UI address (default: `http://localhost:8080`)
 - **Username/Password**: qBittorrent Web UI credentials

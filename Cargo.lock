@@ -942,6 +942,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "cosmic-ext-applet-qbit-remote"
+version = "0.1.0"
+dependencies = [
+ "i18n-embed",
+ "i18n-embed-fl",
+ "libcosmic",
+ "open",
+ "reqwest",
+ "rust-embed",
+ "serde",
+ "serde_json",
+ "sysinfo",
+ "tokio",
+]
+
+[[package]]
 name = "cosmic-freedesktop-icons"
 version = "0.4.0"
 source = "git+https://github.com/pop-os/freedesktop-icons#ab4c57b8e416c6af9297cb04d101889896fd9a92"
@@ -981,22 +997,6 @@ dependencies = [
  "wayland-protocols-wlr",
  "wayland-scanner",
  "wayland-server",
-]
-
-[[package]]
-name = "cosmic-qbit-remote"
-version = "0.1.0"
-dependencies = [
- "i18n-embed",
- "i18n-embed-fl",
- "libcosmic",
- "open",
- "reqwest",
- "rust-embed",
- "serde",
- "serde_json",
- "sysinfo",
- "tokio",
 ]
 
 [[package]]

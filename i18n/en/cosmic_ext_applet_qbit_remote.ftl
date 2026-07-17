@@ -1,4 +1,4 @@
-app-title = qBit Process Monitor
+app-title = qBit Remote
 about = About
 view = View
 repository = Repository

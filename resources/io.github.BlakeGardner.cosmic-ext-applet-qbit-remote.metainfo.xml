@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>com.github.cosmic-qbit-remote</id>
+  <id>io.github.BlakeGardner.cosmic-ext-applet-qbit-remote</id>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-or-later</project_license>
-  <name>qBit Process Monitor</name>
+  <name>qBit Remote for the COSMIC™ Desktop</name>
   <summary>Pause or throttle qBittorrent downloads when specific programs are running</summary>
   <description>
     <p>
@@ -17,20 +17,20 @@
       <li>Configurable process name patterns (substring match)</li>
       <li>Automatic resume/restore when matching processes exit</li>
       <li>Connects to qBittorrent via its Web API</li>
-      <li>Built for the COSMIC desktop environment</li>
+      <li>Panel applet for the COSMIC™ desktop</li>
     </ul>
   </description>
-  <url type="homepage">https://github.com/YOUR_USERNAME/cosmic-qbit-remote</url>
-  <url type="bugtracker">https://github.com/YOUR_USERNAME/cosmic-qbit-remote/issues</url>
-  <url type="vcs-browser">https://github.com/YOUR_USERNAME/cosmic-qbit-remote</url>
-  <developer id="com.github.your-username">
+  <url type="homepage">https://github.com/BlakeGardner/cosmic-ext-applet-qbit-remote</url>
+  <url type="bugtracker">https://github.com/BlakeGardner/cosmic-ext-applet-qbit-remote/issues</url>
+  <url type="vcs-browser">https://github.com/BlakeGardner/cosmic-ext-applet-qbit-remote</url>
+  <developer id="io.github.blakegardner">
     <name>Blake Gardner</name>
   </developer>
-  <launchable type="desktop-id">com.github.cosmic-qbit-remote.desktop</launchable>
+  <launchable type="desktop-id">io.github.BlakeGardner.cosmic-ext-applet-qbit-remote.desktop</launchable>
   <provides>
     <!-- Marks this as a panel applet so COSMIC Store lists it under Applets. -->
     <id>com.system76.CosmicApplet</id>
-    <binary>cosmic-qbit-remote</binary>
+    <binary>cosmic-ext-applet-qbit-remote</binary>
   </provides>
   <requires>
     <display_length compare="ge">360</display_length>

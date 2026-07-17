@@ -19,10 +19,10 @@ use cosmic::iced::futures::{SinkExt, channel::mpsc};
 use std::time::Duration;
 
 /// Config ID shared with the settings application.
-const CONFIG_ID: &str = "com.github.cosmic-qbit-remote";
+const CONFIG_ID: &str = "io.github.BlakeGardner.cosmic-ext-applet-qbit-remote";
 
 /// Desktop entry ID the panel uses to spawn the applet.
-const APPLET_ID: &str = "com.github.cosmic-qbit-remote.Applet";
+const APPLET_ID: &str = "io.github.BlakeGardner.cosmic-ext-applet-qbit-remote.Applet";
 
 pub fn run() -> cosmic::iced::Result {
     cosmic::applet::run::<QbitApplet>(())
@@ -133,7 +133,7 @@ fn try_acquire_leadership() -> Option<std::fs::File> {
         .create(true)
         .truncate(false)
         .write(true)
-        .open(dir.join("cosmic-qbit-remote-applet.lock"))
+        .open(dir.join("cosmic-ext-applet-qbit-remote-applet.lock"))
         .ok()?;
     file.try_lock().ok().map(|()| file)
 }
@@ -256,7 +256,7 @@ impl cosmic::Application for QbitApplet {
     type Flags = ();
     type Message = Message;
 
-    const APP_ID: &'static str = "com.github.cosmic-qbit-remote.Applet";
+    const APP_ID: &'static str = "io.github.BlakeGardner.cosmic-ext-applet-qbit-remote.Applet";
 
     fn core(&self) -> &cosmic::Core {
         &self.core
