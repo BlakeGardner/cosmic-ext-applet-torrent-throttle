@@ -90,7 +90,7 @@ impl cosmic::Application for AppModel {
     type Flags = ();
     type Message = Message;
 
-    const APP_ID: &'static str = "io.github.BlakeGardner.cosmic-ext-applet-torrent-yield";
+    const APP_ID: &'static str = "io.github.BlakeGardner.cosmic-ext-applet-torrent-throttle";
 
     fn core(&self) -> &cosmic::Core {
         &self.core

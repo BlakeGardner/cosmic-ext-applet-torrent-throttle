@@ -26,8 +26,8 @@ jobs:
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
-          name: cosmic-ext-applet-torrent-yield-linux-x86_64
-          path: target/release/cosmic-ext-applet-torrent-yield
+          name: cosmic-ext-applet-torrent-throttle-linux-x86_64
+          path: target/release/cosmic-ext-applet-torrent-throttle
 
   vendor:
     name: Create vendored source tarball
@@ -42,15 +42,15 @@ jobs:
       - name: Create source archive
         run: |
           VERSION=${GITHUB_REF_NAME#v}
-          tar czf cosmic-ext-applet-torrent-yield-${VERSION}-vendored.tar.gz \
-            --transform "s,^,cosmic-ext-applet-torrent-yield-${VERSION}/," \
+          tar czf cosmic-ext-applet-torrent-throttle-${VERSION}-vendored.tar.gz \
+            --transform "s,^,cosmic-ext-applet-torrent-throttle-${VERSION}/," \
             --exclude='.git' --exclude='target' \
             .
       - name: Upload vendored tarball
         uses: actions/upload-artifact@v4
         with:
           name: vendored-source
-          path: cosmic-ext-applet-torrent-yield-*-vendored.tar.gz
+          path: cosmic-ext-applet-torrent-throttle-*-vendored.tar.gz
 
   release:
     name: Create GitHub Release
@@ -61,7 +61,7 @@ jobs:
       - name: Download binary
         uses: actions/download-artifact@v4
         with:
-          name: cosmic-ext-applet-torrent-yield-linux-x86_64
+          name: cosmic-ext-applet-torrent-throttle-linux-x86_64
           path: artifacts/
       - name: Download vendored source
         uses: actions/download-artifact@v4
@@ -69,11 +69,11 @@ jobs:
           name: vendored-source
           path: artifacts/
       - name: Make binary executable
-        run: chmod +x artifacts/cosmic-ext-applet-torrent-yield
+        run: chmod +x artifacts/cosmic-ext-applet-torrent-throttle
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
           files: |
-            artifacts/cosmic-ext-applet-torrent-yield
-            artifacts/cosmic-ext-applet-torrent-yield-*-vendored.tar.gz
+            artifacts/cosmic-ext-applet-torrent-throttle
+            artifacts/cosmic-ext-applet-torrent-throttle-*-vendored.tar.gz

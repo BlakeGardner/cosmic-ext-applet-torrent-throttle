@@ -1,4 +1,4 @@
-id: io.github.BlakeGardner.cosmic-ext-applet-torrent-yield
+id: io.github.BlakeGardner.cosmic-ext-applet-torrent-throttle
 runtime: org.freedesktop.Platform
 runtime-version: "25.08"
 base: com.system76.Cosmic.BaseApp
@@ -6,7 +6,7 @@ base-version: stable
 sdk: org.freedesktop.Sdk
 sdk-extensions:
   - org.freedesktop.Sdk.Extension.rust-stable
-command: cosmic-ext-applet-torrent-yield
+command: cosmic-ext-applet-torrent-throttle
 finish-args:
   - --share=ipc
   # qBittorrent Web API access
@@ -21,13 +21,13 @@ finish-args:
 build-options:
   append-path: /usr/lib/sdk/rust-stable/bin
   env:
-    CARGO_HOME: /run/build/cosmic-ext-applet-torrent-yield/cargo
+    CARGO_HOME: /run/build/cosmic-ext-applet-torrent-throttle/cargo
 modules:
-  - name: cosmic-ext-applet-torrent-yield
+  - name: cosmic-ext-applet-torrent-throttle
     buildsystem: simple
     build-options:
       env:
-        CARGO_HOME: /run/build/cosmic-ext-applet-torrent-yield/cargo
+        CARGO_HOME: /run/build/cosmic-ext-applet-torrent-throttle/cargo
     build-commands:
       - just vendor-extract
       - just build-vendored
@@ -35,5 +35,5 @@ modules:
     sources:
       - cargo-sources.json
       - type: git
-        url: https://github.com/BlakeGardner/cosmic-ext-applet-torrent-yield.git
+        url: https://github.com/BlakeGardner/cosmic-ext-applet-torrent-throttle.git
         tag: RELEASE_TAG

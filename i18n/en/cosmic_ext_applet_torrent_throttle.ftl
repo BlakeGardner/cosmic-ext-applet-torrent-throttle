@@ -1,4 +1,4 @@
-app-title = Torrent Yield
+app-title = Torrent Throttle
 about = About
 view = View
 repository = Repository

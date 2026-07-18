@@ -1,10 +1,10 @@
 [package]
-name = "cosmic-ext-applet-torrent-yield"
+name = "cosmic-ext-applet-torrent-throttle"
 version = "0.1.0"
 edition = "2021"
 license = "GPL-3.0"
 description = "Applet for the COSMIC™ desktop that pauses or throttles torrent downloads when specific programs are running"
-repository = "https://github.com/BlakeGardner/cosmic-ext-applet-torrent-yield"
+repository = "https://github.com/BlakeGardner/cosmic-ext-applet-torrent-throttle"
 
 [dependencies]
 i18n-embed = { version = "0.16", features = [

@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>io.github.BlakeGardner.cosmic-ext-applet-torrent-yield</id>
+  <id>io.github.BlakeGardner.cosmic-ext-applet-torrent-throttle</id>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-or-later</project_license>
-  <name>Torrent Yield for the COSMIC™ Desktop</name>
+  <name>Torrent Throttle for the COSMIC™ Desktop</name>
   <summary>Pause or throttle torrent downloads when specific programs are running</summary>
   <description>
     <p>
@@ -20,17 +20,17 @@
       <li>Panel applet for the COSMIC™ desktop</li>
     </ul>
   </description>
-  <url type="homepage">https://github.com/BlakeGardner/cosmic-ext-applet-torrent-yield</url>
-  <url type="bugtracker">https://github.com/BlakeGardner/cosmic-ext-applet-torrent-yield/issues</url>
-  <url type="vcs-browser">https://github.com/BlakeGardner/cosmic-ext-applet-torrent-yield</url>
+  <url type="homepage">https://github.com/BlakeGardner/cosmic-ext-applet-torrent-throttle</url>
+  <url type="bugtracker">https://github.com/BlakeGardner/cosmic-ext-applet-torrent-throttle/issues</url>
+  <url type="vcs-browser">https://github.com/BlakeGardner/cosmic-ext-applet-torrent-throttle</url>
   <developer id="io.github.blakegardner">
     <name>Blake Gardner</name>
   </developer>
-  <launchable type="desktop-id">io.github.BlakeGardner.cosmic-ext-applet-torrent-yield.desktop</launchable>
+  <launchable type="desktop-id">io.github.BlakeGardner.cosmic-ext-applet-torrent-throttle.desktop</launchable>
   <provides>
     <!-- Marks this as a panel applet so COSMIC Store lists it under Applets. -->
     <id>com.system76.CosmicApplet</id>
-    <binary>cosmic-ext-applet-torrent-yield</binary>
+    <binary>cosmic-ext-applet-torrent-throttle</binary>
   </provides>
   <requires>
     <display_length compare="ge">360</display_length>

@@ -942,7 +942,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "cosmic-ext-applet-torrent-yield"
+name = "cosmic-ext-applet-torrent-throttle"
 version = "0.1.0"
 dependencies = [
  "i18n-embed",

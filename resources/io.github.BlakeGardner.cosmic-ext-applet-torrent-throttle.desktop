@@ -1,9 +1,9 @@
 [Desktop Entry]
-Name=Torrent Yield
+Name=Torrent Throttle
 Comment=Pause or throttle torrent downloads when specific programs are running
 Type=Application
-Icon=io.github.BlakeGardner.cosmic-ext-applet-torrent-yield
-Exec=cosmic-ext-applet-torrent-yield %F
+Icon=io.github.BlakeGardner.cosmic-ext-applet-torrent-throttle
+Exec=cosmic-ext-applet-torrent-throttle %F
 Terminal=false
 StartupNotify=true
 Categories=Utility;Network;
