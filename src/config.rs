@@ -11,6 +11,12 @@ pub struct MonitorState {
     pub matched_processes: Vec<String>,
     /// Empty string means no error.
     pub last_error: String,
+    /// Whether the saved speed limits below are meaningful. Persisted so the
+    /// original limits survive an applet restart while a throttle is engaged.
+    pub has_saved_limits: bool,
+    /// Speed limits (bytes/sec) captured before the throttle was applied.
+    pub saved_download_limit: u64,
+    pub saved_upload_limit: u64,
 }
 
 /// Quit broadcast, written by whichever applet instance the user quit from

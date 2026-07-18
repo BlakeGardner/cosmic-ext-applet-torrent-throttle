@@ -222,12 +222,16 @@ impl QbitApplet {
         }
     }
 
-    /// Publish the leader's monitoring state so other instances mirror it.
+    /// Publish the leader's monitoring state so other instances mirror it
+    /// and a restarted leader can restore the original speed limits.
     fn save_state(&self) {
         let state = MonitorState {
             is_engaged: self.is_engaged,
             matched_processes: self.matched_processes.clone(),
             last_error: self.last_error.clone().unwrap_or_default(),
+            has_saved_limits: self.saved_limits.is_some(),
+            saved_download_limit: self.saved_limits.as_ref().map_or(0, |l| l.download),
+            saved_upload_limit: self.saved_limits.as_ref().map_or(0, |l| l.upload),
         };
         if let Ok(context) = cosmic_config::Config::new_state(CONFIG_ID, MonitorState::VERSION) {
             if let Err(err) = state.write_entry(&context) {
@@ -238,7 +242,10 @@ impl QbitApplet {
 
     fn disengage(&mut self) -> Task<cosmic::Action<Message>> {
         let config = self.config.clone();
-        let saved_limits = self.saved_limits.take();
+        // Keep the saved limits until the restore succeeds (MonitorTick
+        // clears them on Resumed/Unthrottled) so a failed request can be
+        // retried without losing the original limits.
+        let saved_limits = self.saved_limits.clone();
         cosmic::task::future(async move {
             let (action, error) = engine::disengage(&config, saved_limits).await;
             Message::MonitorTick(MonitorResult {
@@ -276,15 +283,14 @@ impl cosmic::Application for QbitApplet {
 
         let leader_lock = try_acquire_leadership();
 
-        // Followers adopt the leader's published state.
-        let state = if leader_lock.is_none() {
-            cosmic_config::Config::new_state(CONFIG_ID, MonitorState::VERSION)
-                .ok()
-                .and_then(|context| MonitorState::get_entry(&context).ok())
-                .unwrap_or_default()
-        } else {
-            MonitorState::default()
-        };
+        // Followers mirror the leader's published state; a new leader adopts
+        // it too, so an engaged pause/throttle (and the speed limits saved
+        // before throttling) survives an applet restart and is properly
+        // restored on the next disengage.
+        let state = cosmic_config::Config::new_state(CONFIG_ID, MonitorState::VERSION)
+            .ok()
+            .and_then(|context| MonitorState::get_entry(&context).ok())
+            .unwrap_or_default();
 
         let applet = Self {
             core,
@@ -293,12 +299,15 @@ impl cosmic::Application for QbitApplet {
             leader_lock,
             started_at_millis: now_millis(),
             is_engaged: state.is_engaged,
-            saved_limits: None,
+            saved_limits: state.has_saved_limits.then_some(SpeedLimits {
+                download: state.saved_download_limit,
+                upload: state.saved_upload_limit,
+            }),
             matched_processes: state.matched_processes,
             last_error: (!state.last_error.is_empty()).then_some(state.last_error),
         };
 
-        // Reset any stale state left over from a previous leader.
+        // Republish so followers see a consistent state immediately.
         if applet.is_leader() {
             applet.save_state();
         }
@@ -373,7 +382,12 @@ impl cosmic::Application for QbitApplet {
             }
 
             Message::Tick => {
+                // Still engaged with monitoring disabled means an earlier
+                // disengage failed (e.g. client unreachable); retry it.
                 if !self.config.enabled || self.config.patterns.is_empty() {
+                    if self.is_engaged {
+                        return self.disengage();
+                    }
                     return Task::none();
                 }
                 let config = self.config.clone();
@@ -522,7 +536,9 @@ impl cosmic::Application for QbitApplet {
         ];
 
         if self.is_leader() {
-            if self.config.enabled && !self.config.patterns.is_empty() {
+            // Keep ticking while engaged even if monitoring was disabled, so
+            // a failed disengage (e.g. client unreachable) gets retried.
+            if (self.config.enabled && !self.config.patterns.is_empty()) || self.is_engaged {
                 let interval_secs = self.config.poll_interval_secs.max(5);
                 subscriptions.push(
                     cosmic::iced::time::every(Duration::from_secs(interval_secs))
