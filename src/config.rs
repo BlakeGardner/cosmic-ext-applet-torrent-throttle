@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0
 
-use cosmic::cosmic_config::{self, CosmicConfigEntry, cosmic_config_derive::CosmicConfigEntry};
+use cosmic::cosmic_config::{self, cosmic_config_derive::CosmicConfigEntry, CosmicConfigEntry};
 
 /// Runtime monitoring state, written by the leader applet instance and
 /// mirrored by the others (one applet process runs per panel/output).

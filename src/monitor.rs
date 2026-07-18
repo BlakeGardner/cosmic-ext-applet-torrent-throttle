@@ -46,10 +46,11 @@ impl ProcessMonitor {
             let name_lower = name.to_lowercase();
             for pattern in patterns {
                 let pattern_lower = pattern.to_lowercase();
-                if !pattern_lower.is_empty() && name_lower.contains(&pattern_lower) {
-                    if !matched.iter().any(|m| m == name) {
-                        matched.push(name.to_string());
-                    }
+                if !pattern_lower.is_empty()
+                    && name_lower.contains(&pattern_lower)
+                    && !matched.iter().any(|m| m == name)
+                {
+                    matched.push(name.to_string());
                 }
             }
         }

@@ -11,11 +11,11 @@ use cosmic::app;
 use cosmic::applet::{menu_button, padded_control};
 use cosmic::cosmic_config::{self, ConfigGet, ConfigSet, CosmicConfigEntry};
 use cosmic::cosmic_theme::Spacing;
+use cosmic::iced::futures::{channel::mpsc, SinkExt};
 use cosmic::iced::platform_specific::shell::wayland::commands::popup::destroy_popup;
-use cosmic::iced::{Length, Subscription, window};
+use cosmic::iced::{window, Length, Subscription};
 use cosmic::widget::{divider, text, toggler};
-use cosmic::{Element, Task, theme};
-use cosmic::iced::futures::{SinkExt, channel::mpsc};
+use cosmic::{theme, Element, Task};
 use std::time::Duration;
 
 /// Config ID shared with the settings application.
@@ -46,7 +46,8 @@ pub fn ensure_applet_running() {
 
     let mut listed = false;
     for panel in &panels {
-        let Ok(config) = cosmic_config::Config::new(&format!("com.system76.CosmicPanel.{panel}"), 1)
+        let Ok(config) =
+            cosmic_config::Config::new(&format!("com.system76.CosmicPanel.{panel}"), 1)
         else {
             continue;
         };
@@ -55,9 +56,9 @@ pub fn ensure_applet_running() {
             .get::<Option<(Vec<String>, Vec<String>)>>("plugins_wings")
             .ok()
             .flatten();
-        if let Some(wings) = wings.filter(|(left, right)| {
-            left.iter().chain(right).any(|id| id == APPLET_ID)
-        }) {
+        if let Some(wings) =
+            wings.filter(|(left, right)| left.iter().chain(right).any(|id| id == APPLET_ID))
+        {
             listed = true;
             let without = wings_without_applet(&wings);
             respawn_via_toggle(&config, "plugins_wings", &Some(wings), &Some(without));
@@ -70,8 +71,11 @@ pub fn ensure_applet_running() {
             .flatten();
         if let Some(center) = center.filter(|ids| ids.iter().any(|id| id == APPLET_ID)) {
             listed = true;
-            let without: Vec<String> =
-                center.iter().filter(|id| *id != APPLET_ID).cloned().collect();
+            let without: Vec<String> = center
+                .iter()
+                .filter(|id| *id != APPLET_ID)
+                .cloned()
+                .collect();
             respawn_via_toggle(&config, "plugins_center", &Some(center), &Some(without));
         }
     }
@@ -504,9 +508,7 @@ impl cosmic::Application for QbitApplet {
 
         content = content
             .push(padded_control(divider::horizontal::default()).padding([space_xxs, space_s]))
-            .push(
-                menu_button(text::body(fl!("settings-title"))).on_press(Message::OpenSettings),
-            )
+            .push(menu_button(text::body(fl!("settings-title"))).on_press(Message::OpenSettings))
             .push(menu_button(text::body(fl!("quit"))).on_press(Message::Quit));
 
         self.core.applet.popup_container(content).into()

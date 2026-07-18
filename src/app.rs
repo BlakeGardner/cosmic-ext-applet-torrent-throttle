@@ -351,11 +351,8 @@ impl AppModel {
             .title(fl!("connection-heading"))
             .add(
                 widget::settings::item::builder(fl!("url-label")).control(
-                    widget::text_input::text_input(
-                        "http://localhost:8080",
-                        &self.config.qbit_url,
-                    )
-                    .on_input(Message::SetQbitUrl),
+                    widget::text_input::text_input("http://localhost:8080", &self.config.qbit_url)
+                        .on_input(Message::SetQbitUrl),
                 ),
             )
             .add(
@@ -402,8 +399,7 @@ impl AppModel {
             .spacing(space_s)
             .align_y(Alignment::Center)
             .push(
-                widget::button::standard(fl!("test-connection"))
-                    .on_press(Message::TestConnection),
+                widget::button::standard(fl!("test-connection")).on_press(Message::TestConnection),
             );
         if let Some(label) = status_label {
             test_row = test_row.push(label);
@@ -412,22 +408,23 @@ impl AppModel {
 
         // Action mode section
         let is_pause = self.config.action_mode == ActionMode::Pause;
-        let mode_section = widget::settings::section()
-            .title(fl!("action-mode-heading"))
-            .add(
-                widget::settings::item::builder(fl!("mode-pause-label")).control(
-                    widget::radio("", true, Some(is_pause), |_| {
-                        Message::SetActionMode(ActionMode::Pause)
-                    }),
-                ),
-            )
-            .add(
-                widget::settings::item::builder(fl!("mode-throttle-label")).control(
-                    widget::radio("", true, Some(!is_pause), |_| {
-                        Message::SetActionMode(ActionMode::Throttle)
-                    }),
-                ),
-            );
+        let mode_section =
+            widget::settings::section()
+                .title(fl!("action-mode-heading"))
+                .add(
+                    widget::settings::item::builder(fl!("mode-pause-label")).control(
+                        widget::radio("", true, Some(is_pause), |_| {
+                            Message::SetActionMode(ActionMode::Pause)
+                        }),
+                    ),
+                )
+                .add(
+                    widget::settings::item::builder(fl!("mode-throttle-label")).control(
+                        widget::radio("", true, Some(!is_pause), |_| {
+                            Message::SetActionMode(ActionMode::Throttle)
+                        }),
+                    ),
+                );
 
         content = content.push(mode_section);
 
@@ -462,12 +459,9 @@ impl AppModel {
                 .spacing(space_s)
                 .align_y(Alignment::Center)
                 .push(
-                    widget::text_input::text_input(
-                        fl!("pattern-placeholder"),
-                        &self.new_pattern,
-                    )
-                    .on_input(Message::SetNewPattern)
-                    .on_submit(Message::AddPattern),
+                    widget::text_input::text_input(fl!("pattern-placeholder"), &self.new_pattern)
+                        .on_input(Message::SetNewPattern)
+                        .on_submit(Message::AddPattern),
                 )
                 .push(
                     widget::button::standard(fl!("add"))
