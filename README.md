@@ -15,6 +15,11 @@ COSMIC™ is a trademark of System76. This is a third-party application and is n
 - **i18n Ready**: Uses Fluent for internationalization
 - **cosmic-config**: Persistent settings managed through COSMIC's configuration system
 
+## Upcoming Features
+
+- **Live Speed Display**: See current upload/download speed from your torrent client directly in the applet
+- **Multi-Client Support**: Support for torrent clients beyond qBittorrent
+
 ## Use Case
 
 Automatically pause torrent downloads when bandwidth-hungry applications (games, video calls, etc.) are running, and resume when they close.
