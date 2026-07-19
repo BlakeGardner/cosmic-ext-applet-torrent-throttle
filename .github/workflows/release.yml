@@ -42,10 +42,11 @@ jobs:
       - name: Create source archive
         run: |
           VERSION=${GITHUB_REF_NAME#v}
-          tar czf cosmic-ext-applet-torrent-throttle-${VERSION}-vendored.tar.gz \
+          tar czf /tmp/cosmic-ext-applet-torrent-throttle-${VERSION}-vendored.tar.gz \
             --transform "s,^,cosmic-ext-applet-torrent-throttle-${VERSION}/," \
             --exclude='.git' --exclude='target' \
             .
+          mv /tmp/cosmic-ext-applet-torrent-throttle-${VERSION}-vendored.tar.gz .
       - name: Upload vendored tarball
         uses: actions/upload-artifact@v4
         with:

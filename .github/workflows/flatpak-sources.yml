@@ -17,8 +17,8 @@ jobs:
         run: pip install aiohttp toml
       - name: Download flatpak-cargo-generator
         run: |
-          curl -Lo flatpak-cargo-generator.py \
-            https://raw.githubusercontent.com/nickvdyck/flatpak-builder-tools/refs/heads/master/cargo/flatpak-cargo-generator.py
+          curl -fLo flatpak-cargo-generator.py \
+            https://raw.githubusercontent.com/flatpak/flatpak-builder-tools/master/cargo/flatpak-cargo-generator.py
       - name: Generate cargo-sources.json
         run: python3 flatpak-cargo-generator.py Cargo.lock -o cargo-sources.json
       - name: Upload cargo-sources.json
