@@ -1,6 +1,6 @@
 [package]
 name = "cosmic-ext-applet-torrent-throttle"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 license = "GPL-3.0"
 description = "Applet for the COSMIC™ desktop that pauses or throttles torrent downloads when specific programs are running"

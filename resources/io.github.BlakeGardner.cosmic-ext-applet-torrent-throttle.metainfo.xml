@@ -53,6 +53,11 @@
   </keywords>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="0.1.2" date="2026-07-18">
+      <description>
+        <p>Release flatpak bundles and fix the flatpak manifest build commands.</p>
+      </description>
+    </release>
     <release version="0.1.1" date="2026-07-18">
       <description>
         <p>Custom applet and app icons, guaranteed client-state restore, and release workflow fixes.</p>

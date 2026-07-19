@@ -943,7 +943,7 @@ dependencies = [
 
 [[package]]
 name = "cosmic-ext-applet-torrent-throttle"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "i18n-embed",
  "i18n-embed-fl",
