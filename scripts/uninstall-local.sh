@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Removes every per-user trace of Torrent Throttle from a development
-# (run-from-source) setup: running processes, the panel config entry, the
-# dev desktop entry, and the app's config/state directories.
+# Removes every per-user trace of Torrent Throttle: running instances, the
+# panel config entry, the dev desktop entry, the app's config/state
+# directories, and — if installed — the flatpak app, its sandbox data, and
+# permission overrides.
 #
 # This does NOT touch a system install ('just uninstall' handles files
-# installed under /usr) or a flatpak install ('flatpak uninstall' plus
-# this script for the shared config/state).
+# installed under /usr).
 #
 # Usage: ./scripts/uninstall-local.sh [--keep-config]
 #   --keep-config   keep ~/.config settings (URL, patterns, mode)
@@ -44,9 +44,21 @@ echo "==> Removing desktop entry"
 rm -fv ~/.local/share/applications/"$APPLET_ID".desktop \
        ~/.local/share/applications/"$APPID".desktop
 
+if command -v flatpak >/dev/null && flatpak info "$APPID" >/dev/null 2>&1; then
+    echo "==> Uninstalling flatpak"
+    flatpak uninstall -y "$APPID"
+fi
+if command -v flatpak >/dev/null; then
+    # Drop any 'flatpak override' grants (harmless if none exist).
+    flatpak override --user --reset "$APPID" 2>/dev/null || true
+fi
+rm -rf ~/.var/app/"$APPID"
+
 echo "==> Removing state"
 rm -rf ~/.local/state/cosmic/"$APPID"
-rm -f "${XDG_RUNTIME_DIR:-/run/user/$UID}/${BIN_NAME}-applet.lock"
+runtime_dir="${XDG_RUNTIME_DIR:-/run/user/$UID}"
+rm -f "$runtime_dir/${BIN_NAME}-applet.lock" \
+      "$runtime_dir/app/$APPID/${BIN_NAME}-applet.lock"
 
 if [[ $KEEP_CONFIG -eq 0 ]]; then
     echo "==> Removing config"
