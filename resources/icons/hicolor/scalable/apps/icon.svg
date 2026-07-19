@@ -1,17 +1,24 @@
 <svg xmlns="http://www.w3.org/2000/svg"
-     viewBox="0 0 16 16"
-     width="16" height="16"
-     fill="none"
-     stroke="currentColor"
-     stroke-width="1.7"
-     stroke-linecap="round"
-     stroke-linejoin="round"
+     viewBox="0 0 128 128"
+     width="128" height="128"
      role="img"
      aria-labelledby="title desc">
-  <title id="title">Download</title>
-  <desc id="desc">Standalone symbolic download icon for the main app icon.</desc>
+  <title id="title">Torrent Throttle</title>
+  <desc id="desc">A download arrow on a rounded badge.</desc>
 
-  <path d="M8 2.1v7"/>
-  <path d="M5.35 6.45L8 9.1l2.65-2.65"/>
-  <path d="M3.15 12.35h9.7"/>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3b82f6"/>
+      <stop offset="1" stop-color="#1d4ed8"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="8" y="8" width="112" height="112" rx="26" fill="url(#bg)"/>
+
+  <g fill="none" stroke="#ffffff" stroke-width="9"
+     stroke-linecap="round" stroke-linejoin="round">
+    <path d="M64 34v40"/>
+    <path d="M45 57l19 19 19-19"/>
+    <path d="M40 94h48"/>
+  </g>
 </svg>
