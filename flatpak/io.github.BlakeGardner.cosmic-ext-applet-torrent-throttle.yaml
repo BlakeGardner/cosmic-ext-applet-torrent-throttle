@@ -29,8 +29,7 @@ modules:
       env:
         CARGO_HOME: /run/build/cosmic-ext-applet-torrent-throttle/cargo
     build-commands:
-      - just vendor-extract
-      - just build-vendored
+      - just build-release --offline
       - just prefix=/app install
     sources:
       - cargo-sources.json

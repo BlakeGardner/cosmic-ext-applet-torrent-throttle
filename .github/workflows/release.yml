@@ -29,34 +29,54 @@ jobs:
           name: cosmic-ext-applet-torrent-throttle-linux-x86_64
           path: target/release/cosmic-ext-applet-torrent-throttle
 
-  vendor:
-    name: Create vendored source tarball
+  flatpak:
+    name: Build flatpak bundle
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Install just
-        uses: extractions/setup-just@v2
-      - name: Vendor dependencies
-        run: just vendor
-      - name: Create source archive
+      - name: Install flatpak-builder
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder ostree python3-aiohttp python3-tomlkit
+      - name: Install flatpak SDKs
+        run: |
+          flatpak remote-add --if-not-exists --user flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --noninteractive --user flathub \
+            org.freedesktop.Platform//25.08 \
+            org.freedesktop.Sdk//25.08 \
+            org.freedesktop.Sdk.Extension.rust-stable//25.08 \
+            com.system76.Cosmic.BaseApp//stable
+      - name: Generate cargo-sources.json
+        run: |
+          curl -fLo flatpak-cargo-generator.py \
+            https://raw.githubusercontent.com/flatpak/flatpak-builder-tools/master/cargo/flatpak-cargo-generator.py
+          python3 flatpak-cargo-generator.py Cargo.lock -o flatpak/cargo-sources.json
+      - name: Pin manifest to release tag
+        run: |
+          sed -i "s/RELEASE_TAG/${GITHUB_REF_NAME}/" \
+            flatpak/io.github.BlakeGardner.cosmic-ext-applet-torrent-throttle.yaml
+      - name: Build flatpak
+        run: |
+          flatpak-builder --verbose --force-clean --sandbox --user \
+            --install-deps-from=flathub --repo=repo \
+            flatpak-out flatpak/io.github.BlakeGardner.cosmic-ext-applet-torrent-throttle.yaml
+      - name: Create flatpak bundle
         run: |
           VERSION=${GITHUB_REF_NAME#v}
-          tar czf /tmp/cosmic-ext-applet-torrent-throttle-${VERSION}-vendored.tar.gz \
-            --transform "s,^,cosmic-ext-applet-torrent-throttle-${VERSION}/," \
-            --exclude='.git' --exclude='target' \
-            .
-          mv /tmp/cosmic-ext-applet-torrent-throttle-${VERSION}-vendored.tar.gz .
-      - name: Upload vendored tarball
+          flatpak build-bundle repo \
+            cosmic-ext-applet-torrent-throttle-${VERSION}.flatpak \
+            io.github.BlakeGardner.cosmic-ext-applet-torrent-throttle
+      - name: Upload flatpak bundle
         uses: actions/upload-artifact@v4
         with:
-          name: vendored-source
-          path: cosmic-ext-applet-torrent-throttle-*-vendored.tar.gz
+          name: flatpak-bundle
+          path: cosmic-ext-applet-torrent-throttle-*.flatpak
+          if-no-files-found: error
 
   release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
-    needs: [build, vendor]
+    needs: [build, flatpak]
     steps:
       - uses: actions/checkout@v4
       - name: Download binary
@@ -64,10 +84,10 @@ jobs:
         with:
           name: cosmic-ext-applet-torrent-throttle-linux-x86_64
           path: artifacts/
-      - name: Download vendored source
+      - name: Download flatpak bundle
         uses: actions/download-artifact@v4
         with:
-          name: vendored-source
+          name: flatpak-bundle
           path: artifacts/
       - name: Make binary executable
         run: chmod +x artifacts/cosmic-ext-applet-torrent-throttle
@@ -77,4 +97,4 @@ jobs:
           generate_release_notes: true
           files: |
             artifacts/cosmic-ext-applet-torrent-throttle
-            artifacts/cosmic-ext-applet-torrent-throttle-*-vendored.tar.gz
+            artifacts/cosmic-ext-applet-torrent-throttle-*.flatpak
