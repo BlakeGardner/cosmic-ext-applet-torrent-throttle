@@ -48,6 +48,17 @@ settings application adds the applet to your panel and starts it if it isn't
 already running; you can also place it manually via **COSMIC Settings →
 Desktop → Panel → Configure panel applets**.
 
+### Uninstalling
+
+`just uninstall` removes the system-installed files. To also wipe the per-user
+footprint (running instances, panel entry, dev desktop entry, config and
+state), run:
+
+```bash
+./scripts/uninstall-local.sh              # full cleanup
+./scripts/uninstall-local.sh --keep-config  # keep your settings
+```
+
 ## Running
 
 The settings window:
