@@ -13,6 +13,10 @@ finish-args:
   - --share=network
   - --socket=wayland
   - --talk-name=com.system76.CosmicSettingsDaemon
+  # The settings daemon hands out per-config objects on child bus names
+  # (com.system76.CosmicSettingsDaemon.Config.<id>.V<n>); without this the
+  # config watcher gets no change notifications inside the sandbox.
+  - --talk-name=com.system76.CosmicSettingsDaemon.*
   - --filesystem=xdg-config/cosmic:rw
   # Host process monitoring via `flatpak-spawn --host ps` (sandboxes have
   # their own PID namespace, so sysinfo cannot see host processes). Same

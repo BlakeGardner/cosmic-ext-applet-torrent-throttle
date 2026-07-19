@@ -221,14 +221,6 @@ impl QbitApplet {
         }
     }
 
-    fn save_config(&self) {
-        if let Ok(context) = cosmic_config::Config::new(CONFIG_ID, Config::VERSION) {
-            if let Err(err) = self.config.write_entry(&context) {
-                eprintln!("failed to save config: {err}");
-            }
-        }
-    }
-
     /// Publish the leader's monitoring state so other instances mirror it
     /// and a restarted leader can restore the original speed limits.
     fn save_state(&self) {
@@ -352,8 +344,17 @@ impl cosmic::Application for QbitApplet {
             }
 
             Message::ToggleMonitoring(enabled) => {
-                self.config.enabled = enabled;
-                self.save_config();
+                // Write only this key: overwriting the whole config here
+                // could clobber settings saved by the settings app if this
+                // instance's view of the config is stale.
+                match cosmic_config::Config::new(CONFIG_ID, Config::VERSION) {
+                    Ok(context) => {
+                        if let Err(err) = self.config.set_enabled(&context, enabled) {
+                            eprintln!("failed to save config: {err}");
+                        }
+                    }
+                    Err(_) => self.config.enabled = enabled,
+                }
 
                 if self.is_leader() && !enabled && self.is_engaged {
                     return self.disengage();
