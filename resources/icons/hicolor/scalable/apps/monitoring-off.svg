@@ -3,20 +3,14 @@
      width="16" height="16"
      fill="none"
      stroke="currentColor"
-     stroke-width="1.7"
+     stroke-width="1.8"
      stroke-linecap="round"
      stroke-linejoin="round"
      role="img"
      aria-labelledby="title desc">
   <title id="title">Monitoring off</title>
-  <desc id="desc">Download arrow with an X status badge, indicating monitoring is off.</desc>
+  <desc id="desc">Standalone symbolic X in a circle indicating monitoring is off.</desc>
 
-  <!-- Main download icon -->
-  <path d="M5.6 2.1v6.8"/>
-  <path d="M3.15 6.45L5.6 8.9l2.45-2.45"/>
-  <path d="M2.25 12.35h7.2"/>
-
-  <!-- Status badge -->
-  <circle cx="11.45" cy="4.55" r="2.95"/>
-  <path d="M10.05 5.95l2.8-2.8"/>
+  <circle cx="8" cy="8" r="4.9"/>
+  <path d="M5.8 10.2l4.4-4.4"/>
 </svg>

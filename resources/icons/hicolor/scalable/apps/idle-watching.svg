@@ -3,20 +3,14 @@
      width="16" height="16"
      fill="none"
      stroke="currentColor"
-     stroke-width="1.7"
+     stroke-width="1.8"
      stroke-linecap="round"
      stroke-linejoin="round"
      role="img"
      aria-labelledby="title desc">
   <title id="title">Idle, watching</title>
-  <desc id="desc">Download arrow with an eye status badge, indicating monitoring is active but idle.</desc>
+  <desc id="desc">Standalone symbolic eye indicating monitoring is active but idle.</desc>
 
-  <!-- Main download icon -->
-  <path d="M5.6 2.1v6.8"/>
-  <path d="M3.15 6.45L5.6 8.9l2.45-2.45"/>
-  <path d="M2.25 12.35h7.2"/>
-
-  <!-- Status badge: almond-shaped eye with clear pupil -->
-  <path d="M8.75 4.55c.6-.9 1.55-1.5 2.7-1.5s2.1.6 2.7 1.5c-.6.9-1.55 1.5-2.7 1.5s-2.1-.6-2.7-1.5z"/>
-  <circle cx="11.45" cy="4.55" r=".55" fill="currentColor" stroke="none"/>
+  <path d="M2.65 8c1.15-1.85 3.1-3 5.35-3s4.2 1.15 5.35 3c-1.15 1.85-3.1 3-5.35 3S3.8 9.85 2.65 8z"/>
+  <circle cx="8" cy="8" r="1.15" fill="currentColor" stroke="none"/>
 </svg>
