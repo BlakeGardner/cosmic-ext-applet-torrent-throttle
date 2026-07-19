@@ -1,24 +1,23 @@
 <svg xmlns="http://www.w3.org/2000/svg"
-     viewBox="0 0 24 24"
-     width="24" height="24"
+     viewBox="0 0 16 16"
+     width="16" height="16"
      fill="none"
      stroke="currentColor"
-     stroke-width="1.8"
+     stroke-width="1.7"
      stroke-linecap="round"
      stroke-linejoin="round"
      role="img"
      aria-labelledby="title desc">
   <title id="title">Engaged, paused or throttled</title>
-  <desc id="desc">A remote download server with a speed gauge indicating bandwidth throttling is active.</desc>
+  <desc id="desc">Download arrow with a gauge status badge, indicating throttling is active.</desc>
 
-  <!-- Remote torrent client -->
-  <rect x="3.25" y="5.25" width="13.5" height="13.5" rx="2.25"/>
-  <path d="M7 9.25h6"/>
-  <path d="M7 12.25h3.5"/>
-  <circle cx="13.25" cy="15.25" r=".7" fill="currentColor" stroke="none"/>
+  <!-- Main download icon -->
+  <path d="M5.6 2.1v6.8"/>
+  <path d="M3.15 6.45L5.6 8.9l2.45-2.45"/>
+  <path d="M2.25 12.35h7.2"/>
 
-  <!-- Throttle gauge badge -->
-  <path d="M14.7 8.15a3.85 3.85 0 1 1 6.1 0"/>
-  <path d="M17.75 6.25l-1.6 1.3"/>
-  <circle cx="17.75" cy="6.25" r=".55" fill="currentColor" stroke="none"/>
+  <!-- Status badge -->
+  <path d="M8.95 6.4a2.85 2.85 0 1 1 5 0"/>
+  <path d="M11.45 4.55l-1.15.9"/>
+  <circle cx="11.45" cy="4.55" r=".42" fill="currentColor" stroke="none"/>
 </svg>
