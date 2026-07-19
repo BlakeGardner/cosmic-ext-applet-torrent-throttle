@@ -232,10 +232,13 @@ impl QbitApplet {
             saved_download_limit: self.saved_limits.as_ref().map_or(0, |l| l.download),
             saved_upload_limit: self.saved_limits.as_ref().map_or(0, |l| l.upload),
         };
-        if let Ok(context) = cosmic_config::Config::new_state(CONFIG_ID, MonitorState::VERSION) {
-            if let Err(err) = state.write_entry(&context) {
-                eprintln!("failed to save monitor state: {err}");
+        match cosmic_config::Config::new_state(CONFIG_ID, MonitorState::VERSION) {
+            Ok(context) => {
+                if let Err(err) = state.write_entry(&context) {
+                    eprintln!("failed to save monitor state: {err}");
+                }
             }
+            Err(err) => eprintln!("failed to open monitor state store: {err}"),
         }
     }
 

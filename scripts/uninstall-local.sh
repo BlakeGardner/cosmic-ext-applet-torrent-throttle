@@ -51,6 +51,9 @@ fi
 if command -v flatpak >/dev/null; then
     # Drop any 'flatpak override' grants (harmless if none exist).
     flatpak override --user --reset "$APPID" 2>/dev/null || true
+    # Bundle installs leave behind a sideload remote; remove it so a later
+    # install starts from a truly clean slate.
+    flatpak remote-delete --user --force "${BIN_NAME}-origin" 2>/dev/null || true
 fi
 rm -rf ~/.var/app/"$APPID"
 

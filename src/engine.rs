@@ -35,7 +35,17 @@ pub async fn run_cycle(
     let has_matches = !matched.is_empty();
 
     let (action, new_saved_limits, error) = if has_matches && !was_engaged {
-        engage(&config).await
+        if config.qbit_url.trim().is_empty() {
+            // Nothing to engage against; surface a clear hint instead of a
+            // cryptic HTTP client error.
+            (
+                ActionTaken::None,
+                None,
+                Some("qBittorrent URL not configured — open Settings".to_string()),
+            )
+        } else {
+            engage(&config).await
+        }
     } else if !has_matches && was_engaged {
         let (action, error) = disengage(&config, saved_limits).await;
         (action, None, error)

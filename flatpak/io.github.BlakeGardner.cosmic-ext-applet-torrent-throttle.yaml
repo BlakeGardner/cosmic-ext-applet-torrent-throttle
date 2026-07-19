@@ -18,6 +18,10 @@ finish-args:
   # config watcher gets no change notifications inside the sandbox.
   - --talk-name=com.system76.CosmicSettingsDaemon.*
   - --filesystem=xdg-config/cosmic:rw
+  # cosmic-config writes *state* (shared monitor status between applet
+  # instances) to $HOME/.local/state/cosmic under Flatpak, not the sandbox
+  # XDG_STATE_HOME; without this grant every state write silently fails.
+  - --filesystem=~/.local/state/cosmic/io.github.BlakeGardner.cosmic-ext-applet-torrent-throttle:create
   # Host process monitoring via `flatpak-spawn --host ps` (sandboxes have
   # their own PID namespace, so sysinfo cannot see host processes). Same
   # pattern as other applets in the COSMIC Flatpak repo (e.g. minimon).
