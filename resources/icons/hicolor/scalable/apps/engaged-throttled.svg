@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 24 24"
+     width="24" height="24"
+     fill="none"
+     stroke="currentColor"
+     stroke-width="1.8"
+     stroke-linecap="round"
+     stroke-linejoin="round"
+     role="img"
+     aria-labelledby="title desc">
+  <title id="title">Engaged, paused or throttled</title>
+  <desc id="desc">A remote download server with a speed gauge indicating bandwidth throttling is active.</desc>
+
+  <!-- Remote torrent client -->
+  <rect x="3.25" y="5.25" width="13.5" height="13.5" rx="2.25"/>
+  <path d="M7 9.25h6"/>
+  <path d="M7 12.25h3.5"/>
+  <circle cx="13.25" cy="15.25" r=".7" fill="currentColor" stroke="none"/>
+
+  <!-- Throttle gauge badge -->
+  <path d="M14.7 8.15a3.85 3.85 0 1 1 6.1 0"/>
+  <path d="M17.75 6.25l-1.6 1.3"/>
+  <circle cx="17.75" cy="6.25" r=".55" fill="currentColor" stroke="none"/>
+</svg>

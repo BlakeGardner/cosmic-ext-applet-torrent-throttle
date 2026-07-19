@@ -193,14 +193,17 @@ impl QbitApplet {
         self.leader_lock.is_some()
     }
 
-    fn icon_name(&self) -> &'static str {
-        if !self.config.enabled {
-            "network-disconnected-symbolic"
+    fn icon_handle(&self) -> cosmic::widget::icon::Handle {
+        let bytes: &'static [u8] = if !self.config.enabled {
+            include_bytes!("../resources/icons/hicolor/scalable/apps/monitoring-off.svg")
         } else if self.is_engaged {
-            "media-playback-pause-symbolic"
+            include_bytes!("../resources/icons/hicolor/scalable/apps/engaged-throttled.svg")
         } else {
-            "network-transmit-receive-symbolic"
-        }
+            include_bytes!("../resources/icons/hicolor/scalable/apps/idle-watching.svg")
+        };
+        let mut handle = cosmic::widget::icon::from_svg_bytes(bytes);
+        handle.symbolic = true;
+        handle
     }
 
     fn status_text(&self) -> String {
@@ -462,7 +465,7 @@ impl cosmic::Application for QbitApplet {
     fn view(&self) -> Element<'_, Self::Message> {
         self.core
             .applet
-            .icon_button(self.icon_name())
+            .icon_button_from_handle(self.icon_handle())
             .on_press_down(Message::TogglePopup)
             .into()
     }
