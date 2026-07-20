@@ -4,9 +4,15 @@ Torrent Throttle for the COSMIC™ desktop — a panel applet that monitors runn
 
 COSMIC™ is a trademark of System76. This is a third-party application and is not affiliated with or endorsed by System76.
 
+## Screenshots
+
+| Applet popup | Settings |
+| --- | --- |
+| ![Panel applet popup showing live throttle status and matched processes](resources/screenshots/applet-popup.png) | ![Settings window with qBittorrent connection, action mode, and process patterns](resources/screenshots/settings.png) |
+
 ## Features
 
-- **Process Monitoring**: Scans running processes every 30 seconds for configurable name patterns
+- **Process Monitoring**: Scans running processes on a configurable interval for configurable name patterns
 - **Auto-Pause**: Pauses all qBittorrent downloads when a matching process is detected
 - **Auto-Resume**: Resumes downloads when no matching processes are running
 - **Panel Applet**: A native COSMIC panel applet (like Wi-Fi/Bluetooth) whose popup has a real toggle switch for monitoring plus live status and throttle info. The settings window is a separate view launched from the popup
@@ -37,6 +43,21 @@ just build-release
 ```
 
 ## Installation
+
+### Flatpak (recommended)
+
+Download the `.flatpak` bundle from the
+[latest release](https://github.com/BlakeGardner/cosmic-ext-applet-torrent-throttle/releases/latest)
+and install it:
+
+```bash
+flatpak install --user cosmic-ext-applet-torrent-throttle-<version>.flatpak
+```
+
+Then launch **Torrent Throttle** once (or add the applet via **COSMIC Settings →
+Desktop → Panel → Configure panel applets**) to place it on your panel.
+
+### From source
 
 ```bash
 just install
@@ -94,10 +115,10 @@ The packaging follows the pattern used by applets in the COSMIC Store:
 
 Settings are stored via `cosmic-config` under the app ID `io.github.BlakeGardner.cosmic-ext-applet-torrent-throttle`:
 
-- **qBittorrent URL**: The Web UI address (default: `http://localhost:8080`)
+- **qBittorrent URL**: The Web UI address (e.g. `http://localhost:8080`)
 - **Username/Password**: qBittorrent Web UI credentials
 - **Process Patterns**: List of substrings to match against running process names (case-insensitive)
-- **Poll Interval**: How often to scan processes (default: 30 seconds)
+- **Poll Interval**: How often to scan processes (minimum: 5 seconds)
 
 ## Requirements
 

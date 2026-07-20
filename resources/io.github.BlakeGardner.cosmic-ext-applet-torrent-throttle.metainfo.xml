@@ -3,13 +3,14 @@
   <id>io.github.BlakeGardner.cosmic-ext-applet-torrent-throttle</id>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-or-later</project_license>
-  <name>Torrent Throttle for the COSMIC™ Desktop</name>
+  <name>Torrent Throttle</name>
   <summary>Pause or throttle torrent downloads when specific programs are running</summary>
   <description>
     <p>
-      Monitors running processes on your system and automatically pauses or throttles
-      torrent downloads when a matching program is detected. Downloads resume or
-      speed limits are restored when the program exits.
+      Torrent Throttle is a panel applet for the COSMIC™ desktop. It monitors running
+      processes on your system and automatically pauses or throttles torrent downloads
+      when a matching program is detected. Downloads resume or speed limits are
+      restored when the program exits.
     </p>
     <p>Features:</p>
     <ul>
@@ -27,6 +28,16 @@
     <name>Blake Gardner</name>
   </developer>
   <launchable type="desktop-id">io.github.BlakeGardner.cosmic-ext-applet-torrent-throttle.desktop</launchable>
+  <screenshots>
+    <screenshot type="default">
+      <image>https://raw.githubusercontent.com/BlakeGardner/cosmic-ext-applet-torrent-throttle/master/resources/screenshots/settings.png</image>
+      <caption>Settings window with qBittorrent connection, action mode, and process patterns</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/BlakeGardner/cosmic-ext-applet-torrent-throttle/master/resources/screenshots/applet-popup.png</image>
+      <caption>Panel applet popup showing live throttle status and matched processes</caption>
+    </screenshot>
+  </screenshots>
   <provides>
     <!-- Marks this as a panel applet so COSMIC Store lists it under Applets. -->
     <id>com.system76.CosmicApplet</id>
