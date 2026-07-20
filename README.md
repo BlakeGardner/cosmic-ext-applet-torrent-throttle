@@ -1,4 +1,4 @@
-# cosmic-ext-applet-torrent-throttle
+# Torrent Throttle
 
 Torrent Throttle for the COSMIC™ desktop — a panel applet that monitors running processes and automatically pauses or throttles torrent downloads based on configurable process name patterns, so your torrents yield bandwidth to the programs you care about. Currently supports qBittorrent (via its Web API); support for other torrent clients is planned.
 
