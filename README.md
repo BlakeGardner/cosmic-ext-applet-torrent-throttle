@@ -102,8 +102,21 @@ The packaging follows the pattern used by applets in the COSMIC Store:
   which is what places an app in the store's **Applets** section.
 - Applets are distributed through the [COSMIC Flatpak repo](https://github.com/pop-os/cosmic-flatpak)
   (not Flathub) — submit a PR adding `app/io.github.BlakeGardner.cosmic-ext-applet-torrent-throttle/` with the
-  manifest from `flatpak/` plus a generated `cargo-sources.json`
+  JSON manifest from `flatpak/` (with `RELEASE_COMMIT` replaced by the release
+  commit SHA) plus a generated `cargo-sources.json`
   ([flatpak-cargo-generator](https://github.com/flatpak/flatpak-builder-tools/tree/master/cargo)).
+- Notes on the manifest's `finish-args`:
+  - `--talk-name=com.system76.CosmicSettingsDaemon.*` — the settings daemon
+    hands out per-config objects on child bus names
+    (`com.system76.CosmicSettingsDaemon.Config.<id>.V<n>`); without this the
+    config watcher gets no change notifications inside the sandbox.
+  - `--filesystem=~/.local/state/cosmic/...:create` — cosmic-config writes
+    *state* (shared monitor status between applet instances) to
+    `$HOME/.local/state/cosmic` under Flatpak, not the sandbox
+    `XDG_STATE_HOME`; without this grant every state write silently fails.
+  - `--talk-name=org.freedesktop.Flatpak` — host process monitoring via
+    `flatpak-spawn --host ps` (sandboxes have their own PID namespace, so
+    sysinfo cannot see host processes).
 - Sandbox support is built in: when running inside Flatpak, process
   monitoring uses `flatpak-spawn --host ps` (enabled by
   `--talk-name=org.freedesktop.Flatpak`, the same pattern used by other

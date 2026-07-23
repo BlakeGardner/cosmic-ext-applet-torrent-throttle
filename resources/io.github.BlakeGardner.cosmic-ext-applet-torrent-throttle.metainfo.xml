@@ -64,6 +64,16 @@
   </keywords>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="0.1.6" date="2026-07-23">
+      <description>
+        <p>Prepare for COSMIC Flatpak repository submission: version alignment and packaging fixes.</p>
+      </description>
+    </release>
+    <release version="0.1.5" date="2026-07-19">
+      <description>
+        <p>Add screenshots to the store listing and rename the project title to Torrent Throttle.</p>
+      </description>
+    </release>
     <release version="0.1.4" date="2026-07-19">
       <description>
         <p>Fix monitor status not updating across applet instances when installed as a flatpak, and show a clear message when no qBittorrent URL is configured.</p>

@@ -51,15 +51,15 @@ jobs:
           curl -fLo flatpak-cargo-generator.py \
             https://raw.githubusercontent.com/flatpak/flatpak-builder-tools/master/cargo/flatpak-cargo-generator.py
           python3 flatpak-cargo-generator.py Cargo.lock -o flatpak/cargo-sources.json
-      - name: Pin manifest to release tag
+      - name: Pin manifest to release commit
         run: |
-          sed -i "s/RELEASE_TAG/${GITHUB_REF_NAME}/" \
-            flatpak/io.github.BlakeGardner.cosmic-ext-applet-torrent-throttle.yaml
+          sed -i "s/RELEASE_COMMIT/${GITHUB_SHA}/" \
+            flatpak/io.github.BlakeGardner.cosmic-ext-applet-torrent-throttle.json
       - name: Build flatpak
         run: |
           flatpak-builder --verbose --force-clean --sandbox --user \
             --install-deps-from=flathub --repo=repo \
-            flatpak-out flatpak/io.github.BlakeGardner.cosmic-ext-applet-torrent-throttle.yaml
+            flatpak-out flatpak/io.github.BlakeGardner.cosmic-ext-applet-torrent-throttle.json
       - name: Create flatpak bundle
         run: |
           VERSION=${GITHUB_REF_NAME#v}
