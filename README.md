@@ -124,6 +124,46 @@ The packaging follows the pattern used by applets in the COSMIC Store:
   (leader election, quit) uses the Flatpak per-app shared runtime
   directory and cosmic-config state instead of signals.
 
+## Releasing a new version
+
+Everything below must land in a single commit **before** tagging, so the tag,
+binary version, and store metadata all agree (v0.1.5 shipped mismatched
+because the tag was pushed without the version bump):
+
+1. Bump `version` in `Cargo.toml`.
+2. Refresh the lockfile so it records the new version:
+   ```bash
+   cargo update -p cosmic-ext-applet-torrent-throttle
+   ```
+3. Add a `<release version="X.Y.Z" date="YYYY-MM-DD">` entry (with a short
+   changelog `<description>`) to
+   `resources/io.github.BlakeGardner.cosmic-ext-applet-torrent-throttle.metainfo.xml` —
+   the COSMIC Store shows these entries as the app's changelog. Validate with:
+   ```bash
+   appstreamcli validate resources/*.metainfo.xml
+   ```
+4. Commit, then tag and push:
+   ```bash
+   git push origin master
+   git tag vX.Y.Z && git push origin vX.Y.Z
+   ```
+   The tag triggers the **Release** workflow (builds the binary and the
+   flatpak bundle, creates the GitHub release — the flatpak build also proves
+   the manifest still builds offline) and the **Flatpak cargo-sources**
+   workflow (uploads a `cargo-sources.json` artifact).
+5. Update the COSMIC Flatpak repo — open a PR against
+   [pop-os/cosmic-flatpak](https://github.com/pop-os/cosmic-flatpak) that, in
+   `app/io.github.BlakeGardner.cosmic-ext-applet-torrent-throttle/`:
+   - sets the manifest's `commit` field to the new release commit SHA
+     (`git rev-parse vX.Y.Z`), and
+   - replaces `cargo-sources.json` with the artifact from the
+     **Flatpak cargo-sources** run for the tag (needed whenever `Cargo.lock`
+     changed, which is nearly always).
+
+   Users receive the update through the COSMIC Store once that PR is merged —
+   the flatpak repo builds only what its manifests pin, it never pulls the
+   latest code automatically.
+
 ## Configuration
 
 Settings are stored via `cosmic-config` under the app ID `io.github.BlakeGardner.cosmic-ext-applet-torrent-throttle`:
