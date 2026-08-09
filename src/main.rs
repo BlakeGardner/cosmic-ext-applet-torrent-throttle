@@ -2,6 +2,7 @@
 
 mod app;
 mod applet;
+mod client;
 mod config;
 mod engine;
 mod i18n;

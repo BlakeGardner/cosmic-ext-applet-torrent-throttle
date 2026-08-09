@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0
 
-//! Shared monitoring engine: checks processes and engages/disengages
-//! qBittorrent, independent of any particular UI.
+//! Shared monitoring engine: checks processes and engages/disengages the
+//! configured torrent client, independent of any particular UI.
 
+use crate::client::{SpeedLimits, TorrentClient};
 use crate::config::{ActionMode, Config};
 use crate::monitor::ProcessMonitor;
-use crate::qbit::{QbitClient, SpeedLimits};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ActionTaken {
@@ -41,7 +41,7 @@ pub async fn run_cycle(
             (
                 ActionTaken::None,
                 None,
-                Some("qBittorrent URL not configured — open Settings".to_string()),
+                Some("Torrent client URL not configured — open Settings".to_string()),
             )
         } else {
             engage(&config).await
@@ -62,15 +62,11 @@ pub async fn run_cycle(
 }
 
 async fn engage(config: &Config) -> (ActionTaken, Option<SpeedLimits>, Option<String>) {
-    let client = QbitClient::new(
-        &config.qbit_url,
-        &config.qbit_username,
-        &config.qbit_password,
-    );
+    let client = TorrentClient::from_config(config);
     match config.action_mode {
         ActionMode::Pause => match client.pause_all().await {
             Ok(()) => (ActionTaken::Paused, None, None),
-            Err(e) => (ActionTaken::None, None, Some(e.to_string())),
+            Err(e) => (ActionTaken::None, None, Some(e)),
         },
         ActionMode::Throttle => {
             // Save current limits before applying the throttle.
@@ -82,10 +78,10 @@ async fn engage(config: &Config) -> (ActionTaken, Option<SpeedLimits>, Option<St
                     };
                     match client.set_speed_limits(&target).await {
                         Ok(()) => (ActionTaken::Throttled, Some(current), None),
-                        Err(e) => (ActionTaken::None, None, Some(e.to_string())),
+                        Err(e) => (ActionTaken::None, None, Some(e)),
                     }
                 }
-                Err(e) => (ActionTaken::None, None, Some(e.to_string())),
+                Err(e) => (ActionTaken::None, None, Some(e)),
             }
         }
     }
@@ -96,15 +92,11 @@ pub async fn disengage(
     config: &Config,
     saved_limits: Option<SpeedLimits>,
 ) -> (ActionTaken, Option<String>) {
-    let client = QbitClient::new(
-        &config.qbit_url,
-        &config.qbit_username,
-        &config.qbit_password,
-    );
+    let client = TorrentClient::from_config(config);
     match config.action_mode {
         ActionMode::Pause => match client.resume_all().await {
             Ok(()) => (ActionTaken::Resumed, None),
-            Err(e) => (ActionTaken::None, Some(e.to_string())),
+            Err(e) => (ActionTaken::None, Some(e)),
         },
         ActionMode::Throttle => {
             let restore = saved_limits.unwrap_or(SpeedLimits {
@@ -113,7 +105,7 @@ pub async fn disengage(
             });
             match client.set_speed_limits(&restore).await {
                 Ok(()) => (ActionTaken::Unthrottled, None),
-                Err(e) => (ActionTaken::None, Some(e.to_string())),
+                Err(e) => (ActionTaken::None, Some(e)),
             }
         }
     }

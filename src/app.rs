@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0
 
-use crate::config::{ActionMode, Config};
+use crate::client::TorrentClient;
+use crate::config::{ActionMode, ClientKind, Config};
 use crate::fl;
-use crate::qbit::QbitClient;
 use cosmic::app::context_drawer;
 use cosmic::cosmic_config::{self, CosmicConfigEntry};
 use cosmic::iced::alignment::Horizontal;
@@ -39,6 +39,7 @@ pub enum Message {
     UpdateConfig(Config),
 
     // Settings inputs
+    SetClientKind(usize),
     SetQbitUrl(String),
     SetQbitUsername(String),
     SetQbitPassword(String),
@@ -209,6 +210,13 @@ impl AppModel {
                 self.config = config;
             }
 
+            Message::SetClientKind(index) => {
+                if let Some(kind) = ClientKind::ALL.get(index) {
+                    self.config.client_kind = *kind;
+                    self.save_config();
+                }
+            }
+
             Message::SetQbitUrl(url) => {
                 self.config.qbit_url = url;
                 self.save_config();
@@ -276,16 +284,11 @@ impl AppModel {
             }
 
             Message::TestConnection => {
-                let url = self.config.qbit_url.clone();
-                let user = self.config.qbit_username.clone();
-                let pass = self.config.qbit_password.clone();
+                let config = self.config.clone();
                 self.connection_status = Some(ConnectionStatus::Testing);
                 return cosmic::task::future(async move {
-                    let client = QbitClient::new(&url, &user, &pass);
-                    match client.test_connection().await {
-                        Ok(version) => Message::ConnectionResult(Ok(version)),
-                        Err(e) => Message::ConnectionResult(Err(e.to_string())),
-                    }
+                    let client = TorrentClient::from_config(&config);
+                    Message::ConnectionResult(client.test_connection().await)
                 });
             }
 
@@ -346,9 +349,16 @@ impl AppModel {
         );
         content = content.push(monitoring_section);
 
-        // qBittorrent connection settings section
+        // Torrent client connection settings section
         let connection_section = widget::settings::section()
             .title(fl!("connection-heading"))
+            .add(
+                widget::settings::item::builder(fl!("client-label")).control(widget::dropdown(
+                    ClientKind::LABELS,
+                    Some(self.config.client_kind.index()),
+                    Message::SetClientKind,
+                )),
+            )
             .add(
                 widget::settings::item::builder(fl!("url-label")).control(
                     widget::text_input::text_input("http://localhost:8080", &self.config.qbit_url)

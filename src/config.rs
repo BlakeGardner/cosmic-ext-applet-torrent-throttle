@@ -29,6 +29,30 @@ pub struct QuitSignal {
     pub quit_at_millis: u64,
 }
 
+/// Which torrent client (and API dialect) to talk to. New torrent clients
+/// are added here and in [`TorrentClient`](crate::client::TorrentClient).
+#[derive(Debug, Default, Clone, Copy, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+pub enum ClientKind {
+    /// qBittorrent 5.x (WebAPI 2.11+).
+    #[default]
+    QbitV5,
+    /// qBittorrent 4.x.
+    QbitV4,
+}
+
+impl ClientKind {
+    /// All selectable client kinds, in the order shown in the GUI.
+    pub const ALL: &'static [ClientKind] = &[ClientKind::QbitV5, ClientKind::QbitV4];
+
+    /// Display labels matching [`ClientKind::ALL`] (product names, not localized).
+    pub const LABELS: &'static [&'static str] = &["qBittorrent 5.x", "qBittorrent 4.x"];
+
+    /// Position within [`ClientKind::ALL`], for dropdown selection state.
+    pub fn index(&self) -> usize {
+        Self::ALL.iter().position(|k| k == self).unwrap_or(0)
+    }
+}
+
 /// What action to take when a matching process is detected.
 #[derive(Debug, Default, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum ActionMode {
@@ -42,6 +66,8 @@ pub enum ActionMode {
 #[derive(Debug, Default, Clone, CosmicConfigEntry, Eq, PartialEq)]
 #[version = 1]
 pub struct Config {
+    /// Which torrent client to control.
+    pub client_kind: ClientKind,
     pub qbit_url: String,
     pub qbit_username: String,
     pub qbit_password: String,
