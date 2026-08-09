@@ -168,6 +168,7 @@ because the tag was pushed without the version bump):
 
 Settings are stored via `cosmic-config` under the app ID `io.github.BlakeGardner.cosmic-ext-applet-torrent-throttle`:
 
+- **Client**: Which torrent client to control (qBittorrent 5.x or qBittorrent 4.x)
 - **qBittorrent URL**: The Web UI address (e.g. `http://localhost:8080`)
 - **Username/Password**: qBittorrent Web UI credentials
 - **Process Patterns**: List of substrings to match against running process names (case-insensitive)
@@ -176,7 +177,7 @@ Settings are stored via `cosmic-config` under the app ID `io.github.BlakeGardner
 ## Requirements
 
 - COSMIC desktop environment (or libcosmic dependencies)
-- qBittorrent with Web UI enabled
+- qBittorrent (4.x or 5.x) with Web UI enabled
 - Rust toolchain
 
 ## License

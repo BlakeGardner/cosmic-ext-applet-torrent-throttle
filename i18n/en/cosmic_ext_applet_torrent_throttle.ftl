@@ -16,13 +16,14 @@ error-message = Error: {$error}
 
 # Settings page
 settings-title = Settings
-connection-heading = qBittorrent connection
+connection-heading = Torrent client connection
+client-label = Client
 url-label = URL
 username-label = Username
 password-label = Password
 test-connection = Test connection
 testing = Testing…
-connected = Connected to qBittorrent {$version}
+connected = Connected to {$version}
 connection-failed = Connection failed: {$error}
 
 # Action mode

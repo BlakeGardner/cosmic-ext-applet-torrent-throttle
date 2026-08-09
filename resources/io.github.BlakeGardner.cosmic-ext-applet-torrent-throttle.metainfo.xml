@@ -64,6 +64,11 @@
   </keywords>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="0.1.7" date="2026-08-09">
+      <description>
+        <p>Fix authentication errors with qBittorrent 5.x and add a client version selector (qBittorrent 5.x or 4.x) in Settings, backed by a new client abstraction for future torrent client support. Login now works behind reverse proxies that strip response bodies, and server error messages (such as IP ban notices) are shown in the connection test.</p>
+      </description>
+    </release>
     <release version="0.1.6" date="2026-07-23">
       <description>
         <p>Prepare for COSMIC Flatpak repository submission: version alignment and packaging fixes.</p>

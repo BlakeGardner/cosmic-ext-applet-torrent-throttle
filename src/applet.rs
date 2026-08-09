@@ -3,10 +3,10 @@
 //! Native COSMIC panel applet: a panel icon with a popup containing a real
 //! toggle switch, matching the Wi-Fi and Bluetooth applets.
 
+use crate::client::SpeedLimits;
 use crate::config::{ActionMode, Config, MonitorState, QuitSignal};
 use crate::engine::{self, ActionTaken, MonitorResult};
 use crate::fl;
-use crate::qbit::SpeedLimits;
 use cosmic::app;
 use cosmic::applet::{menu_button, padded_control};
 use cosmic::cosmic_config::{self, ConfigGet, ConfigSet, CosmicConfigEntry};
