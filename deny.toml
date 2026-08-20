@@ -1,0 +1,40 @@
+# cargo-deny configuration — checked in CI (see .github/workflows/ci.yml)
+# and weekly by .github/workflows/audit.yml. Only security advisories, bans,
+# and dependency sources are checked; license checking is intentionally not
+# enabled.
+# Docs: https://embarkstudios.github.io/cargo-deny/
+
+[graph]
+all-features = true
+
+[advisories]
+version = 2
+yanked = "deny"
+ignore = [
+    # quick-xml < 0.41 DoS advisories. quick-xml is pinned by
+    # wayland-scanner, a build-time proc-macro that parses trusted Wayland
+    # protocol XML during compilation — the parser never runs at runtime or
+    # on untrusted input.
+    "RUSTSEC-2026-0194",
+    "RUSTSEC-2026-0195",
+    # Unmaintained transitive dependencies of the libcosmic/iced tree; we
+    # have no control over them here. Revisit when libcosmic updates.
+    "RUSTSEC-2024-0436", # paste
+    "RUSTSEC-2026-0173", # proc-macro-error2
+    "RUSTSEC-2026-0192", # ttf-parser
+    "RUSTSEC-2026-0206", # rustybuzz
+]
+
+[bans]
+multiple-versions = "allow"
+wildcards = "allow"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-git = [
+    "https://github.com/jackpot51/rust-atomicwrites",
+]
+
+[sources.allow-org]
+github = ["pop-os", "wash2", "iced-rs"]
