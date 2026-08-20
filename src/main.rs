@@ -9,6 +9,8 @@ mod i18n;
 mod monitor;
 mod qbit;
 mod sandbox;
+#[cfg(test)]
+mod test_http;
 mod transmission;
 
 fn main() -> cosmic::iced::Result {
