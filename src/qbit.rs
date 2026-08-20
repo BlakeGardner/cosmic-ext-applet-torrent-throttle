@@ -92,6 +92,16 @@ impl QbitClient {
         }
     }
 
+    /// The error for a non-success status that isn't 403 — typically a
+    /// different service answering on the configured URL (e.g. Transmission
+    /// replying 409) or a reverse-proxy error page.
+    fn unexpected_status_error(&self, status: reqwest::StatusCode, url: &str) -> QbitError {
+        QbitError::RequestFailed(format!(
+            "HTTP {status} from {url} — check that the URL points to a qBittorrent \
+             WebUI and the right client is selected in Settings"
+        ))
+    }
+
     async fn login(&self) -> Result<(), QbitError> {
         // With blank credentials there is nothing to log in with; requests
         // are sent without a session and rely on the WebUI's authentication
@@ -211,6 +221,11 @@ impl QbitClient {
         if response.status() == reqwest::StatusCode::FORBIDDEN {
             return Err(self.auth_required_error());
         }
+        if !response.status().is_success() {
+            // e.g. a Transmission server answering 409, or a reverse proxy
+            // error page — anything that is not the qBittorrent WebAPI.
+            return Err(self.unexpected_status_error(response.status(), url));
+        }
 
         response
             .text()
@@ -220,16 +235,34 @@ impl QbitClient {
 
     /// Post to `primary`, falling back to `fallback` if the endpoint does not
     /// exist (safety net when the configured client version doesn't match the
-    /// server).
+    /// server). Any other non-success status is an error.
     async fn post_with_fallback(
         &self,
         primary: &str,
         fallback: &str,
         params: &[(&str, &str)],
     ) -> Result<(), QbitError> {
-        let status = self.post_with_retry(primary, params).await?;
+        let mut status = self.post_with_retry(primary, params).await?;
+        let mut url = primary;
         if status == reqwest::StatusCode::NOT_FOUND {
-            self.post_with_retry(fallback, params).await?;
+            status = self.post_with_retry(fallback, params).await?;
+            url = fallback;
+        }
+        if !status.is_success() {
+            return Err(self.unexpected_status_error(status, url));
+        }
+        Ok(())
+    }
+
+    /// POST and require a success status.
+    async fn post_expect_success(
+        &self,
+        url: &str,
+        params: &[(&str, &str)],
+    ) -> Result<(), QbitError> {
+        let status = self.post_with_retry(url, params).await?;
+        if !status.is_success() {
+            return Err(self.unexpected_status_error(status, url));
         }
         Ok(())
     }
@@ -294,9 +327,8 @@ impl QbitClient {
         self.ensure_authenticated().await?;
         let url = format!("{}/api/v2/transfer/setDownloadLimit", self.base_url);
         let limit_str = limit.to_string();
-        self.post_with_retry(&url, &[("limit", &limit_str)])
+        self.post_expect_success(&url, &[("limit", &limit_str)])
             .await
-            .map(|_| ())
     }
 
     /// Set the global upload speed limit (bytes/sec, 0 = unlimited).
@@ -304,9 +336,8 @@ impl QbitClient {
         self.ensure_authenticated().await?;
         let url = format!("{}/api/v2/transfer/setUploadLimit", self.base_url);
         let limit_str = limit.to_string();
-        self.post_with_retry(&url, &[("limit", &limit_str)])
+        self.post_expect_success(&url, &[("limit", &limit_str)])
             .await
-            .map(|_| ())
     }
 
     /// Set both speed limits at once (bytes/sec, 0 = unlimited).
@@ -321,5 +352,102 @@ impl QbitClient {
 
         let url = format!("{}/api/v2/app/version", self.base_url);
         self.get_with_retry(&url).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_http::mock_server;
+
+    /// A Transmission server answers qBittorrent API requests with 409 and an
+    /// HTML body. That must surface as a clear error, not a number-parse
+    /// failure on the HTML ("invalid digit found in string").
+    #[tokio::test]
+    async fn get_limit_rejects_non_success_status() {
+        let (url, _server) = mock_server(vec![(
+            "409 Conflict",
+            "Content-Type: text/html\r\n",
+            "<h1>409: Conflict</h1><p>invalid session_id header.</p>",
+        )])
+        .await;
+
+        let client = QbitClient::new(&url, "", "", QbitApiVersion::V5);
+        let err = client.get_download_limit().await.unwrap_err();
+        match err {
+            QbitError::RequestFailed(msg) => {
+                assert!(msg.contains("HTTP 409"), "unexpected message: {msg}");
+                assert!(!msg.contains("invalid digit"), "unexpected message: {msg}");
+            }
+            other => panic!("expected RequestFailed, got {other:?}"),
+        }
+    }
+
+    /// pause_all against a non-qBittorrent server must fail, not silently
+    /// succeed (only 404 triggers the version fallback).
+    #[tokio::test]
+    async fn pause_all_rejects_non_success_status() {
+        let (url, _server) = mock_server(vec![(
+            "409 Conflict",
+            "Content-Type: text/html\r\n",
+            "<h1>409: Conflict</h1>",
+        )])
+        .await;
+
+        let client = QbitClient::new(&url, "", "", QbitApiVersion::V5);
+        let err = client.pause_all().await.unwrap_err();
+        match err {
+            QbitError::RequestFailed(msg) => {
+                assert!(msg.contains("HTTP 409"), "unexpected message: {msg}")
+            }
+            other => panic!("expected RequestFailed, got {other:?}"),
+        }
+    }
+
+    /// set limits must also report non-success statuses.
+    #[tokio::test]
+    async fn set_limit_rejects_non_success_status() {
+        let (url, _server) =
+            mock_server(vec![("500 Internal Server Error", "", "something broke")]).await;
+
+        let client = QbitClient::new(&url, "", "", QbitApiVersion::V5);
+        let err = client.set_download_limit(1024).await.unwrap_err();
+        match err {
+            QbitError::RequestFailed(msg) => {
+                assert!(msg.contains("HTTP 500"), "unexpected message: {msg}")
+            }
+            other => panic!("expected RequestFailed, got {other:?}"),
+        }
+    }
+
+    /// The 404 endpoint-rename fallback still works: stop -> 404, pause -> 200.
+    #[tokio::test]
+    async fn pause_all_falls_back_on_404() {
+        let (url, server) =
+            mock_server(vec![("404 Not Found", "", ""), ("200 OK", "", "Ok.")]).await;
+
+        let client = QbitClient::new(&url, "", "", QbitApiVersion::V5);
+        client.pause_all().await.unwrap();
+
+        let requests = server.await.unwrap();
+        assert!(requests[0].starts_with("POST /api/v2/torrents/stop"));
+        assert!(requests[1].starts_with("POST /api/v2/torrents/pause"));
+    }
+
+    /// Happy path: limits parse from plain numeric bodies.
+    #[tokio::test]
+    async fn get_speed_limits_parses_numbers() {
+        let (url, _server) =
+            mock_server(vec![("200 OK", "", "1048576"), ("200 OK", "", "0")]).await;
+
+        let client = QbitClient::new(&url, "", "", QbitApiVersion::V5);
+        let limits = client.get_speed_limits().await.unwrap();
+        assert_eq!(
+            limits,
+            crate::client::SpeedLimits {
+                download: 1_048_576,
+                upload: 0,
+            }
+        );
     }
 }

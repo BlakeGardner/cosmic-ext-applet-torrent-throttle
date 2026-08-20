@@ -350,6 +350,10 @@ impl AppModel {
         content = content.push(monitoring_section);
 
         // Torrent client connection settings section
+        let url_placeholder = match self.config.client_kind {
+            ClientKind::Transmission => "http://localhost:9091",
+            ClientKind::QbitV5 | ClientKind::QbitV4 => "http://localhost:8080",
+        };
         let connection_section = widget::settings::section()
             .title(fl!("connection-heading"))
             .add(
@@ -361,7 +365,7 @@ impl AppModel {
             )
             .add(
                 widget::settings::item::builder(fl!("url-label")).control(
-                    widget::text_input::text_input("http://localhost:8080", &self.config.qbit_url)
+                    widget::text_input::text_input(url_placeholder, &self.config.qbit_url)
                         .on_input(Message::SetQbitUrl),
                 ),
             )

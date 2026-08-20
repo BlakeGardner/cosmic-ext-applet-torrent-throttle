@@ -1,6 +1,6 @@
 # Torrent Throttle
 
-Torrent Throttle for the COSMIC™ desktop — a panel applet that monitors running processes and automatically pauses or throttles torrent downloads based on configurable process name patterns, so your torrents yield bandwidth to the programs you care about. Currently supports qBittorrent (via its Web API); support for other torrent clients is planned.
+Torrent Throttle for the COSMIC™ desktop — a panel applet that monitors running processes and automatically pauses or throttles torrent downloads based on configurable process name patterns, so your torrents yield bandwidth to the programs you care about. Supports qBittorrent (via its Web API) and Transmission (via its RPC API).
 
 COSMIC™ is a trademark of System76. This is a third-party application and is not affiliated with or endorsed by System76.
 
@@ -13,18 +13,19 @@ COSMIC™ is a trademark of System76. This is a third-party application and is n
 ## Features
 
 - **Process Monitoring**: Scans running processes on a configurable interval for configurable name patterns
-- **Auto-Pause**: Pauses all qBittorrent downloads when a matching process is detected
+- **Multi-Client**: Works with qBittorrent (4.x and 5.x) and Transmission
+- **Auto-Pause**: Pauses all torrent downloads when a matching process is detected
 - **Auto-Resume**: Resumes downloads when no matching processes are running
 - **Panel Applet**: A native COSMIC panel applet (like Wi-Fi/Bluetooth) whose popup has a real toggle switch for monitoring plus live status and throttle info. The settings window is a separate view launched from the popup
 - **COSMIC Native**: Built with libcosmic for native integration with the COSMIC desktop
-- **Configurable**: Set qBittorrent API connection details and process patterns through the GUI
+- **Configurable**: Set torrent client connection details and process patterns through the GUI
 - **i18n Ready**: Uses Fluent for internationalization
 - **cosmic-config**: Persistent settings managed through COSMIC's configuration system
 
 ## Upcoming Features
 
 - **Live Speed Display**: See current upload/download speed from your torrent client directly in the applet
-- **Multi-Client Support**: Support for torrent clients beyond qBittorrent
+- **Multi-Client Support**: Support for additional torrent clients (e.g. Deluge)
 
 ## Use Case
 
@@ -168,16 +169,16 @@ because the tag was pushed without the version bump):
 
 Settings are stored via `cosmic-config` under the app ID `io.github.BlakeGardner.cosmic-ext-applet-torrent-throttle`:
 
-- **Client**: Which torrent client to control (qBittorrent 5.x or qBittorrent 4.x)
-- **qBittorrent URL**: The Web UI address (e.g. `http://localhost:8080`)
-- **Username/Password**: qBittorrent Web UI credentials. Leave both blank when the Web UI bypasses authentication (e.g. "Bypass authentication for clients on localhost" for a local qBittorrent instance)
+- **Client**: Which torrent client to control (qBittorrent 5.x, qBittorrent 4.x, or Transmission)
+- **URL**: The client's web address (e.g. `http://localhost:8080` for qBittorrent, `http://localhost:9091` for Transmission — the `/transmission/rpc` path is appended automatically)
+- **Username/Password**: Web UI / RPC credentials. Leave both blank when the client does not require authentication (e.g. qBittorrent's "Bypass authentication for clients on localhost", or Transmission without a remote access password)
 - **Process Patterns**: List of substrings to match against running process names (case-insensitive)
 - **Poll Interval**: How often to scan processes (minimum: 5 seconds)
 
 ## Requirements
 
 - COSMIC desktop environment (or libcosmic dependencies)
-- qBittorrent (4.x or 5.x) with Web UI enabled
+- qBittorrent (4.x or 5.x) with Web UI enabled, or Transmission with remote access (RPC) enabled
 - Rust toolchain
 
 ## License
