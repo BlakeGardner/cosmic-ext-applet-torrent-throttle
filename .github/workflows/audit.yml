@@ -1,0 +1,21 @@
+name: Scheduled audit
+
+# Checks the locked dependency tree against newly published RustSec
+# advisories, independent of pushes (CI's deny job only runs on code changes).
+
+on:
+  schedule:
+    - cron: '0 12 * * 1' # Mondays 12:00 UTC
+  workflow_dispatch:
+
+jobs:
+  audit:
+    name: cargo-deny advisories
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: cargo-deny (advisories)
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check advisories
+          rust-version: stable

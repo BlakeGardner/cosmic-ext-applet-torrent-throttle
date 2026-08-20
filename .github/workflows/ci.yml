@@ -9,6 +9,12 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+# Cancel in-progress runs when new commits are pushed to the same PR/branch,
+# but never cancel runs on master.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
+
 jobs:
   build:
     name: Build
@@ -37,7 +43,7 @@ jobs:
           components: clippy
       - uses: Swatinem/rust-cache@v2
       - name: Clippy
-        run: cargo clippy --all-features --locked -- -D warnings
+        run: cargo clippy --all-targets --all-features --locked -- -D warnings
 
   fmt:
     name: Format
@@ -62,6 +68,16 @@ jobs:
       - name: Run tests
         run: cargo test --verbose --locked
 
+  deny:
+    name: Audit dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: cargo-deny (advisories, licenses, bans, sources)
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          rust-version: stable
+
   validate-desktop:
     name: Validate desktop file
     runs-on: ubuntu-latest
@@ -73,3 +89,13 @@ jobs:
         run: |
           set -e
           find . -name "*.desktop" -exec desktop-file-validate {} \;
+
+  validate-metainfo:
+    name: Validate AppStream metainfo
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install appstream
+        run: sudo apt-get update && sudo apt-get install -y appstream
+      - name: Validate metainfo
+        run: appstreamcli validate --no-net resources/*.metainfo.xml
