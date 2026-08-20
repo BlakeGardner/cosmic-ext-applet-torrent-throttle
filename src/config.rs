@@ -38,14 +38,21 @@ pub enum ClientKind {
     QbitV5,
     /// qBittorrent 4.x.
     QbitV4,
+    /// Transmission (RPC protocol, stable across 2.x–4.x).
+    Transmission,
 }
 
 impl ClientKind {
     /// All selectable client kinds, in the order shown in the GUI.
-    pub const ALL: &'static [ClientKind] = &[ClientKind::QbitV5, ClientKind::QbitV4];
+    pub const ALL: &'static [ClientKind] = &[
+        ClientKind::QbitV5,
+        ClientKind::QbitV4,
+        ClientKind::Transmission,
+    ];
 
     /// Display labels matching [`ClientKind::ALL`] (product names, not localized).
-    pub const LABELS: &'static [&'static str] = &["qBittorrent 5.x", "qBittorrent 4.x"];
+    pub const LABELS: &'static [&'static str] =
+        &["qBittorrent 5.x", "qBittorrent 4.x", "Transmission"];
 
     /// Position within [`ClientKind::ALL`], for dropdown selection state.
     pub fn index(&self) -> usize {
@@ -68,6 +75,9 @@ pub enum ActionMode {
 pub struct Config {
     /// Which torrent client to control.
     pub client_kind: ClientKind,
+    /// Connection settings shared by every client kind. The field names keep
+    /// the historical `qbit_` prefix so existing saved configs stay valid
+    /// (cosmic-config persists each field under its name).
     pub qbit_url: String,
     pub qbit_username: String,
     pub qbit_password: String,
