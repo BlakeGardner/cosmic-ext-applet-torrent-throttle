@@ -342,7 +342,9 @@ mod tests {
         // Bare URL gets the default RPC path appended.
         assert!(requests[0].starts_with("POST /transmission/rpc HTTP/1.1"));
         // First request has no session id; the retry echoes the fresh one.
-        assert!(!requests[0].to_lowercase().contains("x-transmission-session-id"));
+        assert!(!requests[0]
+            .to_lowercase()
+            .contains("x-transmission-session-id"));
         assert!(requests[1]
             .to_lowercase()
             .contains("x-transmission-session-id: abc123"));

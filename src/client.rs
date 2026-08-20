@@ -64,9 +64,7 @@ impl TorrentClient {
     pub async fn get_speed_limits(&self) -> Result<SpeedLimits, String> {
         match self {
             TorrentClient::Qbit(c) => c.get_speed_limits().await.map_err(|e| e.to_string()),
-            TorrentClient::Transmission(c) => {
-                c.get_speed_limits().await.map_err(|e| e.to_string())
-            }
+            TorrentClient::Transmission(c) => c.get_speed_limits().await.map_err(|e| e.to_string()),
         }
     }
 
