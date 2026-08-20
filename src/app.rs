@@ -384,6 +384,7 @@ impl AppModel {
             );
 
         content = content.push(connection_section);
+        content = content.push(widget::text::caption(fl!("credentials-hint")));
 
         // Test connection button with colored status text
         let status_label: Option<Element<'_, Message>> = match &self.connection_status {

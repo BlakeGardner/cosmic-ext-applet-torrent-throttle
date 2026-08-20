@@ -71,7 +71,37 @@ impl QbitClient {
         }
     }
 
+    /// Whether the user left the credentials blank, meaning the WebUI is
+    /// expected to allow unauthenticated access (e.g. "Bypass authentication
+    /// for clients on localhost").
+    fn credentials_blank(&self) -> bool {
+        self.username.is_empty() && self.password.is_empty()
+    }
+
+    /// The error to report when the server refuses a request with 403.
+    fn auth_required_error(&self) -> QbitError {
+        if self.credentials_blank() {
+            QbitError::RequestFailed(
+                "authentication required: enter credentials, or enable \
+                 \"Bypass authentication for clients on localhost\" in \
+                 qBittorrent's WebUI settings"
+                    .to_string(),
+            )
+        } else {
+            QbitError::AuthFailed
+        }
+    }
+
     async fn login(&self) -> Result<(), QbitError> {
+        // With blank credentials there is nothing to log in with; requests
+        // are sent without a session and rely on the WebUI's authentication
+        // bypass. A 403 response later reports a helpful error instead.
+        if self.credentials_blank() {
+            let mut auth = self.authenticated.lock().await;
+            *auth = true;
+            return Ok(());
+        }
+
         let url = format!("{}/api/v2/auth/login", self.base_url);
         let params = [
             ("username", self.username.as_str()),
@@ -131,23 +161,61 @@ impl QbitClient {
             .await
             .map_err(|e| QbitError::RequestFailed(e.to_string()))?;
 
-        if response.status() == reqwest::StatusCode::FORBIDDEN {
+        let response = if response.status() == reqwest::StatusCode::FORBIDDEN {
             let mut auth = self.authenticated.lock().await;
             *auth = false;
             drop(auth);
             self.login().await?;
 
-            let response = self
-                .client
+            self.client
                 .post(url)
                 .form(params)
                 .send()
                 .await
-                .map_err(|e| QbitError::RequestFailed(e.to_string()))?;
-            return Ok(response.status());
+                .map_err(|e| QbitError::RequestFailed(e.to_string()))?
+        } else {
+            response
+        };
+
+        if response.status() == reqwest::StatusCode::FORBIDDEN {
+            return Err(self.auth_required_error());
         }
 
         Ok(response.status())
+    }
+
+    /// GET returning the response body, re-authenticating and retrying on 403.
+    async fn get_with_retry(&self, url: &str) -> Result<String, QbitError> {
+        let response = self
+            .client
+            .get(url)
+            .send()
+            .await
+            .map_err(|e| QbitError::RequestFailed(e.to_string()))?;
+
+        let response = if response.status() == reqwest::StatusCode::FORBIDDEN {
+            let mut auth = self.authenticated.lock().await;
+            *auth = false;
+            drop(auth);
+            self.login().await?;
+
+            self.client
+                .get(url)
+                .send()
+                .await
+                .map_err(|e| QbitError::RequestFailed(e.to_string()))?
+        } else {
+            response
+        };
+
+        if response.status() == reqwest::StatusCode::FORBIDDEN {
+            return Err(self.auth_required_error());
+        }
+
+        response
+            .text()
+            .await
+            .map_err(|e| QbitError::RequestFailed(e.to_string()))
     }
 
     /// Post to `primary`, falling back to `fallback` if the endpoint does not
@@ -196,17 +264,7 @@ impl QbitClient {
     pub async fn get_download_limit(&self) -> Result<u64, QbitError> {
         self.ensure_authenticated().await?;
         let url = format!("{}/api/v2/transfer/downloadLimit", self.base_url);
-        let response = self
-            .client
-            .get(&url)
-            .send()
-            .await
-            .map_err(|e| QbitError::RequestFailed(e.to_string()))?;
-
-        let text = response
-            .text()
-            .await
-            .map_err(|e| QbitError::RequestFailed(e.to_string()))?;
+        let text = self.get_with_retry(&url).await?;
 
         text.trim()
             .parse::<u64>()
@@ -217,17 +275,7 @@ impl QbitClient {
     pub async fn get_upload_limit(&self) -> Result<u64, QbitError> {
         self.ensure_authenticated().await?;
         let url = format!("{}/api/v2/transfer/uploadLimit", self.base_url);
-        let response = self
-            .client
-            .get(&url)
-            .send()
-            .await
-            .map_err(|e| QbitError::RequestFailed(e.to_string()))?;
-
-        let text = response
-            .text()
-            .await
-            .map_err(|e| QbitError::RequestFailed(e.to_string()))?;
+        let text = self.get_with_retry(&url).await?;
 
         text.trim()
             .parse::<u64>()
@@ -272,16 +320,6 @@ impl QbitClient {
         self.login().await?;
 
         let url = format!("{}/api/v2/app/version", self.base_url);
-        let response = self
-            .client
-            .get(&url)
-            .send()
-            .await
-            .map_err(|e| QbitError::RequestFailed(e.to_string()))?;
-
-        response
-            .text()
-            .await
-            .map_err(|e| QbitError::RequestFailed(e.to_string()))
+        self.get_with_retry(&url).await
     }
 }

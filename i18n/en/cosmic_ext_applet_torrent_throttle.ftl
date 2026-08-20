@@ -21,6 +21,7 @@ client-label = Client
 url-label = URL
 username-label = Username
 password-label = Password
+credentials-hint = Leave username and password blank if the qBittorrent WebUI is set to bypass authentication (e.g. for localhost clients).
 test-connection = Test connection
 testing = Testing…
 connected = Connected to {$version}
