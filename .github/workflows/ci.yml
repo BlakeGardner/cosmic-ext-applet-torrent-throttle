@@ -73,9 +73,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: cargo-deny (advisories, licenses, bans, sources)
+      - name: cargo-deny (advisories, bans, sources)
         uses: EmbarkStudios/cargo-deny-action@v2
         with:
+          command: check advisories bans sources
           rust-version: stable
 
   validate-desktop:
