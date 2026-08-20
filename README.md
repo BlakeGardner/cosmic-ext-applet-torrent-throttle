@@ -170,7 +170,7 @@ Settings are stored via `cosmic-config` under the app ID `io.github.BlakeGardner
 
 - **Client**: Which torrent client to control (qBittorrent 5.x or qBittorrent 4.x)
 - **qBittorrent URL**: The Web UI address (e.g. `http://localhost:8080`)
-- **Username/Password**: qBittorrent Web UI credentials
+- **Username/Password**: qBittorrent Web UI credentials. Leave both blank when the Web UI bypasses authentication (e.g. "Bypass authentication for clients on localhost" for a local qBittorrent instance)
 - **Process Patterns**: List of substrings to match against running process names (case-insensitive)
 - **Poll Interval**: How often to scan processes (minimum: 5 seconds)
 
