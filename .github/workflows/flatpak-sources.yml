@@ -10,7 +10,7 @@ jobs:
     name: Generate cargo-sources.json
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - name: Install flatpak-cargo-generator dependencies
         run: pip install aiohttp pyyaml tomlkit
@@ -21,7 +21,7 @@ jobs:
       - name: Generate cargo-sources.json
         run: python3 flatpak-cargo-generator.py Cargo.lock -o cargo-sources.json
       - name: Upload cargo-sources.json
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: cargo-sources
           path: cargo-sources.json
