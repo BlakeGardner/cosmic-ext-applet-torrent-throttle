@@ -64,6 +64,16 @@
   </keywords>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="0.2.2" date="2026-08-21">
+      <description>
+        <p>Fix the reported application version, which remained 0.2.0 in the v0.2.1 release.</p>
+      </description>
+    </release>
+    <release version="0.2.1" date="2026-08-21">
+      <description>
+        <p>Attach COSMIC Flatpak submission files to release assets and update dependencies, including libcosmic and sysinfo.</p>
+      </description>
+    </release>
     <release version="0.2.0" date="2026-08-20">
       <description>
         <p>Add support for the Transmission torrent client, selectable in Settings alongside qBittorrent. qBittorrent instances with localhost authentication bypass enabled can now be used by leaving the credential fields blank, and server errors are surfaced with clearer messages instead of generic failures.</p>
