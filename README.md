@@ -127,25 +127,29 @@ The packaging follows the pattern used by applets in the COSMIC Store:
 
 ## Releasing a new version
 
-Everything below must land in a single commit **before** tagging, so the tag,
-binary version, and store metadata all agree (v0.1.5 shipped mismatched
-because the tag was pushed without the version bump):
+A release is a dedicated release PR followed by a tag. All version data must
+land on `master` **before** tagging, so the tag, binary version, and store
+metadata all agree (v0.1.5 and v0.2.1 shipped mismatched because their tags
+were pushed without the version bump):
 
-1. Bump `version` in `Cargo.toml`.
-2. Refresh the lockfile so it records the new version:
+1. Merge all feature / bugfix PRs (including dependency bumps) that should be
+   part of the release.
+2. On a release branch, bump `version` in `Cargo.toml`.
+3. Refresh the lockfile so it records the new version:
    ```bash
    cargo update -p cosmic-ext-applet-torrent-throttle
    ```
-3. Add a `<release version="X.Y.Z" date="YYYY-MM-DD">` entry (with a short
+4. Add a `<release version="X.Y.Z" date="YYYY-MM-DD">` entry (with a short
    changelog `<description>`) to
    `resources/io.github.BlakeGardner.cosmic-ext-applet-torrent-throttle.metainfo.xml` —
    the COSMIC Store shows these entries as the app's changelog. Validate with:
    ```bash
    appstreamcli validate resources/*.metainfo.xml
    ```
-4. Commit, then tag and push:
+5. Open the release PR with those changes and merge it. Then tag the merge
+   commit and push the tag:
    ```bash
-   git push origin master
+   git checkout master && git pull
    git tag vX.Y.Z && git push origin vX.Y.Z
    ```
    The tag triggers the **Release** workflow, which builds the binary and the
@@ -153,7 +157,7 @@ because the tag was pushed without the version bump):
    GitHub release, and attaches the two COSMIC Flatpak submission files as
    release assets: the manifest pinned to the release commit and the matching
    `cargo-sources.json`.
-5. Update the COSMIC Flatpak repo — open a PR against
+6. Update the COSMIC Flatpak repo — open a PR against
    [pop-os/cosmic-flatpak](https://github.com/pop-os/cosmic-flatpak) that
    replaces both files in
    `app/io.github.BlakeGardner.cosmic-ext-applet-torrent-throttle/` with the
