@@ -1,9 +1,8 @@
 name: Flatpak cargo-sources
 
+# The Release workflow attaches cargo-sources.json (and the pinned manifest)
+# to each release, so this only exists for ad-hoc generation on demand.
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
 
 jobs:

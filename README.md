@@ -103,9 +103,9 @@ The packaging follows the pattern used by applets in the COSMIC Store:
   which is what places an app in the store's **Applets** section.
 - Applets are distributed through the [COSMIC Flatpak repo](https://github.com/pop-os/cosmic-flatpak)
   (not Flathub) — submit a PR adding `app/io.github.BlakeGardner.cosmic-ext-applet-torrent-throttle/` with the
-  JSON manifest from `flatpak/` (with `RELEASE_COMMIT` replaced by the release
-  commit SHA) plus a generated `cargo-sources.json`
-  ([flatpak-cargo-generator](https://github.com/flatpak/flatpak-builder-tools/tree/master/cargo)).
+  pinned JSON manifest and `cargo-sources.json`; each GitHub release attaches
+  both files as ready-to-submit assets (generated from the `flatpak/` template
+  and [flatpak-cargo-generator](https://github.com/flatpak/flatpak-builder-tools/tree/master/cargo)).
 - Notes on the manifest's `finish-args`:
   - `--talk-name=com.system76.CosmicSettingsDaemon.*` — the settings daemon
     hands out per-config objects on child bus names
@@ -148,18 +148,23 @@ because the tag was pushed without the version bump):
    git push origin master
    git tag vX.Y.Z && git push origin vX.Y.Z
    ```
-   The tag triggers the **Release** workflow (builds the binary and the
-   flatpak bundle, creates the GitHub release — the flatpak build also proves
-   the manifest still builds offline) and the **Flatpak cargo-sources**
-   workflow (uploads a `cargo-sources.json` artifact).
+   The tag triggers the **Release** workflow, which builds the binary and the
+   flatpak bundle (proving the manifest still builds offline), creates the
+   GitHub release, and attaches the two COSMIC Flatpak submission files as
+   release assets: the manifest pinned to the release commit and the matching
+   `cargo-sources.json`.
 5. Update the COSMIC Flatpak repo — open a PR against
-   [pop-os/cosmic-flatpak](https://github.com/pop-os/cosmic-flatpak) that, in
-   `app/io.github.BlakeGardner.cosmic-ext-applet-torrent-throttle/`:
-   - sets the manifest's `commit` field to the new release commit SHA
-     (`git rev-parse vX.Y.Z`), and
-   - replaces `cargo-sources.json` with the artifact from the
-     **Flatpak cargo-sources** run for the tag (needed whenever `Cargo.lock`
-     changed, which is nearly always).
+   [pop-os/cosmic-flatpak](https://github.com/pop-os/cosmic-flatpak) that
+   replaces both files in
+   `app/io.github.BlakeGardner.cosmic-ext-applet-torrent-throttle/` with the
+   release assets, e.g. from a cosmic-flatpak checkout:
+   ```bash
+   gh release download vX.Y.Z \
+     --repo BlakeGardner/cosmic-ext-applet-torrent-throttle \
+     --pattern 'io.github.BlakeGardner.cosmic-ext-applet-torrent-throttle.json' \
+     --pattern 'cargo-sources.json' \
+     --clobber --dir app/io.github.BlakeGardner.cosmic-ext-applet-torrent-throttle
+   ```
 
    Users receive the update through the COSMIC Store once that PR is merged —
    the flatpak repo builds only what its manifests pin, it never pulls the

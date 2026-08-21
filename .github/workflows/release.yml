@@ -72,6 +72,14 @@ jobs:
           name: flatpak-bundle
           path: cosmic-ext-applet-torrent-throttle-*.flatpak
           if-no-files-found: error
+      - name: Upload cosmic-flatpak submission files
+        uses: actions/upload-artifact@v4
+        with:
+          name: cosmic-flatpak-submission
+          path: |
+            flatpak/io.github.BlakeGardner.cosmic-ext-applet-torrent-throttle.json
+            flatpak/cargo-sources.json
+          if-no-files-found: error
 
   release:
     name: Create GitHub Release
@@ -89,6 +97,11 @@ jobs:
         with:
           name: flatpak-bundle
           path: artifacts/
+      - name: Download cosmic-flatpak submission files
+        uses: actions/download-artifact@v4
+        with:
+          name: cosmic-flatpak-submission
+          path: artifacts/
       - name: Make binary executable
         run: chmod +x artifacts/cosmic-ext-applet-torrent-throttle
       - name: Create release
@@ -98,3 +111,5 @@ jobs:
           files: |
             artifacts/cosmic-ext-applet-torrent-throttle
             artifacts/cosmic-ext-applet-torrent-throttle-*.flatpak
+            artifacts/io.github.BlakeGardner.cosmic-ext-applet-torrent-throttle.json
+            artifacts/cargo-sources.json
