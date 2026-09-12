@@ -4,7 +4,9 @@
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-or-later</project_license>
   <name>Torrent Throttle</name>
+  <name xml:lang="pl">Dławienie Torrentów</name>
   <summary>Pause or throttle torrent downloads when specific programs are running</summary>
+  <summary xml:lang="pl">Zatrzymaj lub dław pobieranie torrentów gdy działa wybrany program</summary>
   <description>
     <p>
       Torrent Throttle is a panel applet for the COSMIC™ desktop. It monitors running
@@ -12,13 +14,25 @@
       when a matching program is detected. Downloads resume or speed limits are
       restored when the program exits.
     </p>
+    <p xml:lang="pl">
+      Dławienie Torrentów jest apletem dla panelu środowiska graficznego COSMIC™. Monitoruje on
+      działające procesy w twoim systemie i automatycznie wstrzymuje lub dławi pobieranie torrentów
+      kiedy wykryje pasujący program. Pobieranie jest wznawiane lub ograniczenia prędkości są zdjęte
+      kiedy pasujący program jest zamykany.
+    </p>
     <p>Features:</p>
+    <p xml:lang="pl">Funkcje:</p>
     <ul>
       <li>Pause all torrents or apply speed throttle when matching processes are running</li>
+      <li xml:lang="pl">Wstrzymuje wszystkie torrenty lub dławi ich prędkość, kiedy działają pasujące procesy</li>
       <li>Configurable process name patterns (substring match)</li>
+      <li xml:lang="pl">Konfigurowalne nazwy wzorców procesów (dopasowywanie substringów)</li>
       <li>Automatic resume/restore when matching processes exit</li>
+      <li xml:lang="pl">Automatyczne wznawianie kiedy pasujący proces zostanie zakończony</li>
       <li>Connects to qBittorrent via its Web API (more clients planned)</li>
+      <li xml:lang="pl">Łączy z qBittorrentem przez API jego strony (więcej klientów jest planowanych)</li>
       <li>Panel applet for the COSMIC™ desktop</li>
+      <li xml:lang="pl">Aplet panelu dla środowiska COSMIC™</li>
     </ul>
   </description>
   <url type="homepage">https://github.com/BlakeGardner/cosmic-ext-applet-torrent-throttle</url>
@@ -32,10 +46,12 @@
     <screenshot type="default">
       <image>https://raw.githubusercontent.com/BlakeGardner/cosmic-ext-applet-torrent-throttle/master/resources/screenshots/settings.png</image>
       <caption>Settings window with qBittorrent connection, action mode, and process patterns</caption>
+      <caption xml:lang="pl">Okno ustawień z połączeniem qBittorrent, trybami działań i wzorcami procesów</caption>
     </screenshot>
     <screenshot>
       <image>https://raw.githubusercontent.com/BlakeGardner/cosmic-ext-applet-torrent-throttle/master/resources/screenshots/applet-popup.png</image>
       <caption>Panel applet popup showing live throttle status and matched processes</caption>
+      <caption xml:lang="pl">Wyskakujące okna apletu panelu pokazujące na żywo status dławienia i pasujące procesy</caption>
     </screenshot>
   </screenshots>
   <provides>
@@ -50,10 +66,15 @@
     <control>keyboard</control>
     <control>pointing</control>
     <control>touch</control>
+    <control xml:lang="pl">klawiatura</control>
+    <control xml:lang="pl">wskaźnik</control>
+    <control xml:lang="pl">dotyk</control>
   </supports>
   <categories>
     <category>Utility</category>
     <category>Network</category>
+    <category xml:lang="pl">Użytkowe</category>
+    <category xml:lang="pl">Sieciowe</category>
   </categories>
   <keywords>
     <keyword>torrent</keyword>
@@ -61,6 +82,11 @@
     <keyword>bandwidth</keyword>
     <keyword>cosmic</keyword>
     <keyword>process monitor</keyword>
+    <keyword xml:lang="pl">torrent</keyword>
+    <keyword xml:lang="pl">qbittorrent</keyword>
+    <keyword xml:lang="pl">przepustowość</keyword>
+    <keyword xml:lang="pl">cosmic</keyword>
+    <keyword xml:lang="pl">monitorowanie procesów</keyword>
   </keywords>
   <content_rating type="oars-1.1" />
   <releases>

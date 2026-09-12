@@ -1,6 +1,8 @@
 [Desktop Entry]
 Name=Torrent Throttle
+Name[pl]=Dławienie Torrentów
 Comment=Pause or throttle torrent downloads when specific programs are running
+Comment[pl]=Zatrzymaj lub dław pobieranie torrentami kiedy wyznaczony program działa
 Type=Application
 Icon=io.github.BlakeGardner.cosmic-ext-applet-torrent-throttle
 Exec=cosmic-ext-applet-torrent-throttle %F
@@ -8,3 +10,4 @@ Terminal=false
 StartupNotify=true
 Categories=Utility;Network;
 Keywords=torrent;qbittorrent;bandwidth;cosmic;
+Keywords[pl]=torrent;qbittorrent;pobieranie;ściąganie;przesył;cosmic;
